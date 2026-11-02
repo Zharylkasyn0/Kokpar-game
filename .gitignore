@@ -1,0 +1,51 @@
+# ===========================================================================
+# Git ignore for KÖKPAR: Wobbly Steppe (C++17, CMake, Ninja, Visual Studio 2022)
+# ===========================================================================
+
+# Build output directories
+build/
+build_*/
+cmake-build-*/
+out/
+bin/
+obj/
+
+# CMake temporary files & local presets
+CMakeUserPresets.json
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+Makefile
+
+# Visual Studio & IDE files
+.vs/
+*.user
+*.suo
+*.userosv
+*.sln.docstates
+.vscode/
+.idea/
+
+# MSVC compiler / linker outputs
+*.obj
+*.o
+*.exe
+*.dll
+*.lib
+*.pdb
+*.ilk
+*.exp
+*.idb
+*.tlog
+*.log
+
+# Windows system files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msm
+*.msp

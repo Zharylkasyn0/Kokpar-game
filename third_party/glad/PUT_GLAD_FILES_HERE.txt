@@ -1,0 +1,7 @@
+Place the generated GLAD 1.x files here (OpenGL 3.3, Core profile):
+
+  third_party/glad/include/glad/glad.h
+  third_party/glad/include/KHR/khrplatform.h
+  third_party/glad/src/glad.c
+
+See README.md for generation instructions.
