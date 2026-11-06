@@ -90,7 +90,7 @@ void Game::update(float dt)
         goat_.respawn(nextSpawn(), static_cast<float>(score_) * 1.7f);
     }
 
-    camera_.update(dt, horse_.position(), horse_.yaw(), horse_.speed01());
+    camera_.update(dt, input_, horse_.position(), horse_.yaw(), horse_.speed01());
     updateWindowTitle(dt);
 }
 
@@ -149,11 +149,11 @@ void Game::updateWindowTitle(float dt)
         char buffer[200];
         // "\xC3\x96" is the UTF-8 encoding of the letter O with umlaut.
         std::snprintf(buffer, sizeof(buffer),
-                      "K\xC3\x96" "KPAR: Wobbly Steppe  |  Score: %d  |  %s  |  %.0f FPS  |  calls: %d",
+                      "K\xC3\x96" "KPAR: Wobbly Steppe  |  Score: %d  |  %s  |  %.0f FPS  |  Cam: %s",
                       score_,
                       goat_.state() == Goat::State::Carried ? "carrying goat" : "find the goat (E)",
                       static_cast<double>(fps_),
-                      renderer_.drawCalls());
+                      camera_.modeName());
         glfwSetWindowTitle(window_, buffer);
     }
 }
