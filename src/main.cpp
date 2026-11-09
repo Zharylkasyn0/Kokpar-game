@@ -44,8 +44,10 @@ int main()
 
     int exitCode = 0;
     {
+        std::fprintf(stderr, "[DEBUG] Creating Game object\n");
         // Scope: all GL resources (meshes, shader) are destroyed before the context.
         Game game;
+        std::fprintf(stderr, "[DEBUG] Game object created, calling game.init\n");
         if (!game.init(window))
         {
             std::fprintf(stderr, "Game initialisation failed\n");
@@ -53,7 +55,9 @@ int main()
         }
         else
         {
+            std::fprintf(stderr, "[DEBUG] Game initialised, entering loop\n");
             double last = glfwGetTime();
+            int frame = 0;
             while (!glfwWindowShouldClose(window))
             {
                 glfwPollEvents();
@@ -70,9 +74,14 @@ int main()
                 const float dt = static_cast<float>(std::min(now - last, 0.05));
                 last = now;
 
+                if (frame < 5) std::fprintf(stderr, "[DEBUG] frame %d update start\n", frame);
                 game.update(dt);
+                if (frame < 5) std::fprintf(stderr, "[DEBUG] frame %d render start\n", frame);
                 game.render();
+                if (frame < 5) std::fprintf(stderr, "[DEBUG] frame %d swapBuffers start\n", frame);
                 glfwSwapBuffers(window);
+                if (frame < 5) std::fprintf(stderr, "[DEBUG] frame %d complete\n", frame);
+                frame++;
             }
         }
     }

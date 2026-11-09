@@ -9,14 +9,21 @@
 
 bool Game::init(GLFWwindow* window)
 {
+    std::fprintf(stderr, "[DEBUG] Game::init start\n");
     window_ = window;
     input_.init(window);
+    std::fprintf(stderr, "[DEBUG] input_.init done\n");
 
     if (!renderer_.init()) return false;
+    std::fprintf(stderr, "[DEBUG] renderer_.init done\n");
     assets_.init();
+    std::fprintf(stderr, "[DEBUG] assets_.init done\n");
     world_.init(assets_);
+    std::fprintf(stderr, "[DEBUG] world_.init done\n");
     horse_.init(assets_);
+    std::fprintf(stderr, "[DEBUG] horse_.init done\n");
     goat_.init(assets_);
+    std::fprintf(stderr, "[DEBUG] goat_.init done\n");
 
     spawnPoints_ = {
         glm::vec3(-18.0f, 0.0f, -8.0f),
@@ -27,8 +34,10 @@ bool Game::init(GLFWwindow* window)
         glm::vec3(-28.0f, 0.0f, 28.0f),
         glm::vec3(30.0f, 0.0f, -8.0f),
     };
+    std::fprintf(stderr, "[DEBUG] spawnPoints_ done\n");
 
     resetGame();
+    std::fprintf(stderr, "[DEBUG] resetGame done\n");
     return true;
 }
 
