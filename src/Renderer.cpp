@@ -1,9 +1,14 @@
 #include "Renderer.h"
 
+#include <algorithm>
+#include <cmath>
 #include <iostream>
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+
+#include "Assets.h"
+#include "Math.h"
 
 namespace
 {
@@ -65,7 +70,7 @@ void main()
     // Refined soft toon shading: 4 distinct stepped cel bands
     float toon = mix(d, floor(d * 4.0 + 0.5) / 4.0, 0.42);
 
-    // Hemispheric ambient lighting with subtle ground proximity ambient occlusion
+    // Hemispheric ambient lighting with ground proximity ambient occlusion
     float ao = clamp(vWorldPos.y * 1.2 + 0.25, 0.72, 1.0);
     vec3 ambient = mix(uAmbientGround, uAmbientSky, N.y * 0.5 + 0.5) * ao;
 
@@ -76,7 +81,7 @@ void main()
 
     vec3 color = uColor * (ambient + uLightColor * toon) + uLightColor * spec + vec3(rim);
 
-    // Atmospheric distance fog smoothly fading into the sky
+    // Atmospheric distance fog smoothly fading into the horizon sky
     float dist = length(uCamPos - vWorldPos);
     float fog = clamp((dist - uFogStart) / (uFogEnd - uFogStart), 0.0, 1.0);
     color = mix(color, uFogColor, fog);
@@ -109,10 +114,45 @@ bool Renderer::init()
     glEnable(GL_MULTISAMPLE);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    // Generate deterministic celestial star dome
+    Rng rng(421337u);
+    stars_.clear();
+    stars_.reserve(140);
+    for (int i = 0; i < 140; ++i)
+    {
+        const float theta = rng.range(0.0f, kTwoPi);
+        const float phi = rng.range(0.12f, kHalfPi * 0.95f); // Upper hemisphere
+        const float x = std::cos(phi) * std::cos(theta);
+        const float y = std::sin(phi);
+        const float z = std::cos(phi) * std::sin(theta);
+
+        Star s;
+        s.dir = glm::normalize(glm::vec3(x, y, z));
+        s.size = rng.range(0.9f, 2.2f);
+        s.twinklePhase = rng.range(0.0f, kTwoPi);
+        stars_.push_back(s);
+    }
+
     return true;
 }
 
 void Renderer::beginScene(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& cameraPos)
+{
+    LightingState def;
+    def.toLight = glm::normalize(glm::vec3(-0.45f, 0.85f, 0.40f));
+    def.lightColor = glm::vec3(1.00f, 0.94f, 0.80f);
+    def.ambientSky = glm::vec3(0.48f, 0.56f, 0.68f);
+    def.ambientGround = glm::vec3(0.34f, 0.30f, 0.22f);
+    def.skyColor = glm::vec3(0.62f, 0.80f, 0.95f);
+    def.fogColor = def.skyColor;
+    def.fogStart = 80.0f;
+    def.fogEnd = 310.0f;
+
+    beginScene(view, projection, cameraPos, def);
+}
+
+void Renderer::beginScene(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& cameraPos, const LightingState& lighting)
 {
     drawCalls_ = 0;
     shader_.use();
@@ -120,21 +160,57 @@ void Renderer::beginScene(const glm::mat4& view, const glm::mat4& projection, co
     const glm::mat4 viewProj = projection * view;
     glUniformMatrix4fv(uViewProj_, 1, GL_FALSE, glm::value_ptr(viewProj));
 
-    // Warm golden steppe sun
-    const glm::vec3 toLight = glm::normalize(glm::vec3(-0.45f, 0.85f, 0.40f));
-    const glm::vec3 lightColor(1.00f, 0.94f, 0.80f);
-    const glm::vec3 ambientSky(0.48f, 0.56f, 0.68f);
-    const glm::vec3 ambientGround(0.34f, 0.30f, 0.22f);
-    const glm::vec3 fogColor = skyColor();
+    skyColor_ = lighting.skyColor;
 
-    glUniform3fv(uLightDir_, 1, glm::value_ptr(toLight));
-    glUniform3fv(uLightColor_, 1, glm::value_ptr(lightColor));
-    glUniform3fv(uAmbientSky_, 1, glm::value_ptr(ambientSky));
-    glUniform3fv(uAmbientGround_, 1, glm::value_ptr(ambientGround));
+    glUniform3fv(uLightDir_, 1, glm::value_ptr(lighting.toLight));
+    glUniform3fv(uLightColor_, 1, glm::value_ptr(lighting.lightColor));
+    glUniform3fv(uAmbientSky_, 1, glm::value_ptr(lighting.ambientSky));
+    glUniform3fv(uAmbientGround_, 1, glm::value_ptr(lighting.ambientGround));
     glUniform3fv(uCamPos_, 1, glm::value_ptr(cameraPos));
-    glUniform3fv(uFogColor_, 1, glm::value_ptr(fogColor));
-    glUniform1f(uFogStart_, 80.0f);
-    glUniform1f(uFogEnd_, 310.0f);
+    glUniform3fv(uFogColor_, 1, glm::value_ptr(lighting.fogColor));
+    glUniform1f(uFogStart_, lighting.fogStart);
+    glUniform1f(uFogEnd_, lighting.fogEnd);
+}
+
+void Renderer::drawCelestials(const Assets& assets, const glm::vec3& cameraPos, const LightingState& lighting, float time)
+{
+    // 1. Sun Disc
+    if (lighting.sunWorldDir.y > -0.15f)
+    {
+        const glm::vec3 sunPos = cameraPos + lighting.sunWorldDir * 420.0f;
+        const float sunSize = 24.0f;
+        const glm::vec3 sunCol = glm::mix(glm::vec3(1.0f, 0.65f, 0.25f), glm::vec3(1.0f, 0.98f, 0.85f),
+                                          std::clamp(lighting.sunWorldDir.y * 3.0f, 0.0f, 1.0f));
+
+        // Corona glow
+        drawUnlit(assets.sphere(), Translate(sunPos) * Scale(sunSize * 1.8f), sunCol * 0.7f, 0.35f);
+        // Sun core disc
+        drawUnlit(assets.sphere(), Translate(sunPos) * Scale(sunSize), glm::vec3(1.0f, 1.0f, 0.95f), 1.0f);
+    }
+
+    // 2. Moon Disc
+    if (lighting.moonWorldDir.y > -0.15f)
+    {
+        const glm::vec3 moonPos = cameraPos + lighting.moonWorldDir * 420.0f;
+        const float moonSize = 16.0f;
+
+        // Moon halo
+        drawUnlit(assets.sphere(), Translate(moonPos) * Scale(moonSize * 1.6f), glm::vec3(0.50f, 0.65f, 0.95f), 0.25f);
+        // Moon luminous silver core
+        drawUnlit(assets.sphere(), Translate(moonPos) * Scale(moonSize), glm::vec3(0.92f, 0.95f, 1.00f), 0.95f);
+    }
+
+    // 3. Stars Dome at Night
+    if (lighting.starVisibility > 0.02f)
+    {
+        const float alpha = lighting.starVisibility;
+        for (const Star& s : stars_)
+        {
+            const float twinkle = 0.75f + 0.25f * std::sin(time * 3.5f + s.twinklePhase);
+            const glm::vec3 starPos = cameraPos + s.dir * 430.0f;
+            drawUnlit(assets.sphere(), Translate(starPos) * Scale(s.size * twinkle), glm::vec3(0.95f, 0.96f, 1.0f), alpha);
+        }
+    }
 }
 
 void Renderer::submit(const Mesh& mesh, const glm::mat4& model, const glm::vec3& color, float alpha, bool unlit)

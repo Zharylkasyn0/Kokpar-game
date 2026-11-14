@@ -1,12 +1,16 @@
 #pragma once
 
+#include <vector>
 #include <glm/glm.hpp>
 
 #include "Mesh.h"
 #include "Shader.h"
+#include "Lighting.h"
+
+class Assets;
 
 // Owns the main shader and issues draw calls. One directional light, hemispheric
-// ambient, soft toon banding and distance fog (all in GLSL, see Renderer.cpp).
+// ambient, soft toon banding, celestial discs, stars, and dynamic distance fog.
 class Renderer
 {
 public:
@@ -14,6 +18,10 @@ public:
 
     // Sets camera + lighting uniforms. Call once per frame before drawing the scene.
     void beginScene(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& cameraPos);
+    void beginScene(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& cameraPos, const LightingState& lighting);
+
+    // Celestial objects (sun, moon, stars)
+    void drawCelestials(const Assets& assets, const glm::vec3& cameraPos, const LightingState& lighting, float time);
 
     // Lit draw (directional light + fog).
     void draw(const Mesh& mesh, const glm::mat4& model, const glm::vec3& color, float alpha = 1.0f);
@@ -24,7 +32,8 @@ public:
     void beginHud(int width, int height);
     void endHud();
 
-    glm::vec3 skyColor() const { return glm::vec3(0.62f, 0.80f, 0.95f); }
+    void setSkyColor(const glm::vec3& col) { skyColor_ = col; }
+    glm::vec3 skyColor() const { return skyColor_; }
     int drawCalls() const { return drawCalls_; }
 
 private:
@@ -32,6 +41,15 @@ private:
 
     Shader shader_;
     int drawCalls_ = 0;
+    glm::vec3 skyColor_ = glm::vec3(0.62f, 0.80f, 0.95f);
+
+    // Starfield points
+    struct Star {
+        glm::vec3 dir;
+        float size;
+        float twinklePhase;
+    };
+    std::vector<Star> stars_;
 
     GLint uViewProj_ = -1;
     GLint uModel_ = -1;

@@ -18,7 +18,16 @@ bool Game::init(GLFWwindow* window)
     if (!renderer_.init()) return false;
     assets_.init();
     hud_.init();
+    menuSystem_.init();
+    settingsManager_.init();
+    locationManager_.init();
+    lightingManager_.init();
+
+    // Apply saved settings
+    applyLoadedSettings();
+
     world_.init(assets_);
+    world_.setLocation(locationManager_.selectedLocation());
     goat_.init(assets_);
     particles_.init(assets_);
 
@@ -31,16 +40,16 @@ bool Game::init(GLFWwindow* window)
     // Traditional Kipchak / Steppe participant tunic colors
     horses_[0].setVestColor(glm::vec3(0.80f, 0.14f, 0.14f)); // Player: Kipchak Crimson
     horses_[1].setVestColor(glm::vec3(0.18f, 0.45f, 0.90f)); // Bot 1: Steppe Azure Blue
-    horses_[2].setVestColor(glm::vec3(0.9f, 0.9f, 0.20f)); // Bot 2: Nomad Vermillion
+    horses_[2].setVestColor(glm::vec3(0.92f, 0.32f, 0.18f)); // Bot 2: Nomad Vermillion
     horses_[3].setVestColor(glm::vec3(0.20f, 0.68f, 0.32f)); // Bot 3: Grassland Emerald Green
 
-    // Personality offsets for bot flanking: Left (-0.6f), Direct (0.0f), Right (+0.6f)
+    // Personality offsets for bot flanking
     botAIs_[0].init(1, -0.6f);
     botAIs_[1].init(2,  0.0f);
     botAIs_[2].init(3,  0.6f);
 
     spawnPoints_ = {
-        glm::vec3(0.0f, 0.0f, 0.0f),       // Center serke spawn at kickoff
+        glm::vec3(0.0f, 0.0f, 0.0f),
         glm::vec3(-18.0f, 0.0f, -8.0f),
         glm::vec3(20.0f, 0.0f, -20.0f),
         glm::vec3(-12.0f, 0.0f, 14.0f),
@@ -51,7 +60,43 @@ bool Game::init(GLFWwindow* window)
     };
 
     resetGame();
+
+    // Start in Main Menu automatically on launch
+    state_ = GameState::MainMenu;
+    input_.setCursorCaptured(false);
+
     return true;
+}
+
+void Game::applyLoadedSettings()
+{
+    const auto& s = settingsManager_.settings();
+    locationManager_.selectLocation(static_cast<LocationId>(s.selectedLocation));
+
+    const LightingPresetId pId = static_cast<LightingPresetId>(std::clamp(s.defaultTimePreset, 0, 6));
+    lightingManager_.applyPreset(pId);
+
+    const LightingManager::CycleDuration cDur = static_cast<LightingManager::CycleDuration>(std::clamp(s.autoCycleIndex, 0, 4));
+    lightingManager_.setCycleDuration(cDur);
+}
+
+void Game::setState(GameState s)
+{
+    state_ = s;
+    if (s == GameState::Playing)
+    {
+        input_.setCursorCaptured(true);
+    }
+    else
+    {
+        input_.setCursorCaptured(false);
+    }
+}
+
+void Game::startMatch()
+{
+    resetGame();
+    setState(GameState::Playing);
 }
 
 void Game::resetGame()
@@ -69,7 +114,7 @@ void Game::resetGame()
 
     spawnIndex_ = 0;
 
-    // Four-corner cardinal arena spawn positions facing towards center Kazanlyk/serke
+    // Four-corner cardinal arena spawn positions
     horses_[0].reset(glm::vec3(0.0f, 0.0f, -22.0f), 0.0f);       // South facing North
     horses_[1].reset(glm::vec3(22.0f, 0.0f, 0.0f), -kHalfPi);    // East facing West
     horses_[2].reset(glm::vec3(0.0f, 0.0f, 22.0f), kPi);         // North facing South
@@ -162,11 +207,386 @@ void Game::resolveHorseCollisions()
     }
 }
 
+void Game::updateMenuNavigation()
+{
+    int fbw = 0, fbh = 0;
+    glfwGetFramebufferSize(window_, &fbw, &fbh);
+    const float s = std::max(1.0f, static_cast<float>(fbh) / 720.0f);
+    const float sw = static_cast<float>(fbw);
+    const float sh = static_cast<float>(fbh);
+    const float mx = static_cast<float>(input_.mouseX());
+    const float my = sh - static_cast<float>(input_.mouseY());
+
+    const bool lmb = input_.mousePressed(GLFW_MOUSE_BUTTON_LEFT);
+    const bool enter = input_.pressed(GLFW_KEY_ENTER) || input_.pressed(GLFW_KEY_KP_ENTER);
+    const bool esc = input_.pressed(GLFW_KEY_ESCAPE);
+    const bool up = input_.pressed(GLFW_KEY_UP) || input_.pressed(GLFW_KEY_W);
+    const bool down = input_.pressed(GLFW_KEY_DOWN) || input_.pressed(GLFW_KEY_S);
+    const bool left = input_.pressed(GLFW_KEY_LEFT) || input_.pressed(GLFW_KEY_A);
+    const bool right = input_.pressed(GLFW_KEY_RIGHT) || input_.pressed(GLFW_KEY_D);
+
+    // =======================================================================
+    // 1. MAIN MENU
+    // =======================================================================
+    if (state_ == GameState::MainMenu)
+    {
+        if (down) menuSelectionIndex_ = (menuSelectionIndex_ + 1) % 5;
+        if (up)   menuSelectionIndex_ = (menuSelectionIndex_ + 4) % 5;
+
+        const float cardW = 390.0f * s;
+        const float cardH = 460.0f * s;
+        const float cardX = (sw - cardW) * 0.5f;
+        const float cardY = (sh - cardH) * 0.5f - 15.0f * s;
+        const float btnW = cardW - 60.0f * s;
+        const float btnH = 42.0f * s;
+        const float btnX = cardX + 30.0f * s;
+        const float startY = cardY + cardH - 140.0f * s;
+        const float spacingY = 52.0f * s;
+
+        int clickedIndex = -1;
+        for (int i = 0; i < 5; ++i)
+        {
+            const float by = startY - static_cast<float>(i) * spacingY;
+            if (mx >= btnX && mx <= btnX + btnW && my >= by && my <= by + btnH)
+            {
+                menuSelectionIndex_ = i;
+                if (lmb) clickedIndex = i;
+            }
+        }
+
+        if (enter) clickedIndex = menuSelectionIndex_;
+
+        if (clickedIndex == 0)
+        {
+            startMatch();
+        }
+        else if (clickedIndex == 1)
+        {
+            previousMenuState_ = GameState::MainMenu;
+            state_ = GameState::LocationSelect;
+            menuSelectionIndex_ = 2; // Default focus to Select
+        }
+        else if (clickedIndex == 2)
+        {
+            previousMenuState_ = GameState::MainMenu;
+            state_ = GameState::TimeLightingMenu;
+            menuSelectionIndex_ = 2;
+        }
+        else if (clickedIndex == 3)
+        {
+            previousMenuState_ = GameState::MainMenu;
+            state_ = GameState::SettingsMenu;
+            menuSelectionIndex_ = 0;
+        }
+        else if (clickedIndex == 4)
+        {
+            glfwSetWindowShouldClose(window_, GLFW_TRUE);
+        }
+    }
+    // =======================================================================
+    // 2. LOCATION SELECTION
+    // =======================================================================
+    else if (state_ == GameState::LocationSelect)
+    {
+        if (left)
+        {
+            locationManager_.previous();
+            world_.setLocation(locationManager_.selectedLocation());
+        }
+        if (right)
+        {
+            locationManager_.next();
+            world_.setLocation(locationManager_.selectedLocation());
+        }
+
+        const float cardW = 580.0f * s;
+        const float cardH = 480.0f * s;
+        const float cardX = (sw - cardW) * 0.5f;
+        const float cardY = (sh - cardH) * 0.5f;
+
+        const float prevX = cardX + 30.0f * s;
+        const float prevY = cardY + 95.0f * s;
+        const float navW = 140.0f * s;
+        const float navH = 38.0f * s;
+
+        const float nextX = cardX + cardW - 30.0f * s - navW;
+        const float nextY = prevY;
+
+        const float selW = 190.0f * s;
+        const float selH = 42.0f * s;
+        const float selX = cardX + (cardW - selW) * 0.5f;
+        const float selY = cardY + 93.0f * s;
+
+        const float backW = 160.0f * s;
+        const float backH = 34.0f * s;
+        const float backX = cardX + (cardW - backW) * 0.5f;
+        const float backY = cardY + 30.0f * s;
+
+        if (lmb)
+        {
+            if (mx >= prevX && mx <= prevX + navW && my >= prevY && my <= prevY + navH)
+            {
+                locationManager_.previous();
+                world_.setLocation(locationManager_.selectedLocation());
+            }
+            else if (mx >= nextX && mx <= nextX + navW && my >= nextY && my <= nextY + navH)
+            {
+                locationManager_.next();
+                world_.setLocation(locationManager_.selectedLocation());
+            }
+            else if (mx >= selX && mx <= selX + selW && my >= selY && my <= selY + selH)
+            {
+                settingsManager_.settings().selectedLocation = static_cast<int>(locationManager_.selectedLocation());
+                settingsManager_.save();
+                setState(previousMenuState_);
+            }
+            else if (mx >= backX && mx <= backX + backW && my >= backY && my <= backY + backH)
+            {
+                setState(previousMenuState_);
+            }
+        }
+
+        if (enter)
+        {
+            settingsManager_.settings().selectedLocation = static_cast<int>(locationManager_.selectedLocation());
+            settingsManager_.save();
+            setState(previousMenuState_);
+        }
+        if (esc)
+        {
+            setState(previousMenuState_);
+        }
+    }
+    // =======================================================================
+    // 3. TIME & LIGHTING MENU
+    // =======================================================================
+    else if (state_ == GameState::TimeLightingMenu)
+    {
+        if (left)  lightingManager_.setTimeOfDay(lightingManager_.timeOfDay() - 0.5f);
+        if (right) lightingManager_.setTimeOfDay(lightingManager_.timeOfDay() + 0.5f);
+        if (up)    lightingManager_.setManualAngles(lightingManager_.sunElevation() + 4.0f, lightingManager_.sunAzimuth());
+        if (down)  lightingManager_.setManualAngles(lightingManager_.sunElevation() - 4.0f, lightingManager_.sunAzimuth());
+
+        // Quick numbers 1..7 for presets
+        for (int k = GLFW_KEY_1; k <= GLFW_KEY_7; ++k)
+        {
+            if (input_.pressed(k))
+            {
+                lightingManager_.applyPreset(static_cast<LightingPresetId>(k - GLFW_KEY_1));
+            }
+        }
+
+        const float cardW = 540.0f * s;
+        const float cardH = 490.0f * s;
+        const float cardX = (sw - cardW) * 0.5f;
+        const float cardY = (sh - cardH) * 0.5f;
+
+        const float pBtnW = 105.0f * s;
+        const float pBtnH = 34.0f * s;
+        const float pStartX = cardX + 32.0f * s;
+        const float pStartY = cardY + cardH - 180.0f * s;
+
+        const LightingPresetId presets[7] = {
+            LightingPresetId::Dawn, LightingPresetId::Morning, LightingPresetId::Noon,
+            LightingPresetId::Afternoon, LightingPresetId::Sunset, LightingPresetId::Night, LightingPresetId::Midnight
+        };
+
+        if (lmb)
+        {
+            for (int i = 0; i < 7; ++i)
+            {
+                const int col = i % 4;
+                const int row = i / 4;
+                const float bx = pStartX + static_cast<float>(col) * (pBtnW + 16.0f * s);
+                const float by = pStartY - static_cast<float>(row) * (pBtnH + 12.0f * s);
+                if (mx >= bx && mx <= bx + pBtnW && my >= by && my <= by + pBtnH)
+                {
+                    lightingManager_.applyPreset(presets[i]);
+                }
+            }
+
+            // Bottom Buttons
+            const float btnW = 120.0f * s;
+            const float btnH = 36.0f * s;
+            const float btnY = cardY + 40.0f * s;
+            const float applyX = cardX + 50.0f * s;
+            const float resetX = cardX + (cardW - btnW) * 0.5f;
+            const float backX = cardX + cardW - 50.0f * s - btnW;
+
+            if (mx >= applyX && mx <= applyX + btnW && my >= btnY && my <= btnY + btnH)
+            {
+                setState(previousMenuState_);
+            }
+            else if (mx >= resetX && mx <= resetX + btnW && my >= btnY && my <= btnY + btnH)
+            {
+                lightingManager_.applyPreset(LightingPresetId::Noon);
+            }
+            else if (mx >= backX && mx <= backX + btnW && my >= btnY && my <= btnY + btnH)
+            {
+                setState(previousMenuState_);
+            }
+        }
+
+        if (enter || esc)
+        {
+            setState(previousMenuState_);
+        }
+    }
+    // =======================================================================
+    // 4. SETTINGS MENU
+    // =======================================================================
+    else if (state_ == GameState::SettingsMenu)
+    {
+        const float cardW = 520.0f * s;
+        const float cardH = 460.0f * s;
+        const float cardX = (sw - cardW) * 0.5f;
+        const float cardY = (sh - cardH) * 0.5f;
+
+        const float backW = 150.0f * s;
+        const float backH = 36.0f * s;
+        const float backX = cardX + (cardW - backW) * 0.5f;
+        const float backY = cardY + 25.0f * s;
+
+        if (lmb)
+        {
+            if (mx >= backX && mx <= backX + backW && my >= backY && my <= backY + backH)
+            {
+                settingsManager_.save();
+                setState(previousMenuState_);
+            }
+        }
+
+        if (enter || esc)
+        {
+            settingsManager_.save();
+            setState(previousMenuState_);
+        }
+    }
+    // =======================================================================
+    // 5. PAUSE MENU
+    // =======================================================================
+    else if (state_ == GameState::Paused)
+    {
+        if (down) menuSelectionIndex_ = (menuSelectionIndex_ + 1) % 6;
+        if (up)   menuSelectionIndex_ = (menuSelectionIndex_ + 5) % 6;
+
+        const float cardW = 380.0f * s;
+        const float cardH = 430.0f * s;
+        const float cardX = (sw - cardW) * 0.5f;
+        const float cardY = (sh - cardH) * 0.5f;
+        const float btnW = cardW - 60.0f * s;
+        const float btnH = 38.0f * s;
+        const float btnX = cardX + 30.0f * s;
+        const float startY = cardY + cardH - 95.0f * s;
+        const float spacingY = 48.0f * s;
+
+        int clickedIndex = -1;
+        for (int i = 0; i < 6; ++i)
+        {
+            const float by = startY - static_cast<float>(i) * spacingY;
+            if (mx >= btnX && mx <= btnX + btnW && my >= by && my <= by + btnH)
+            {
+                menuSelectionIndex_ = i;
+                if (lmb) clickedIndex = i;
+            }
+        }
+
+        if (enter) clickedIndex = menuSelectionIndex_;
+        if (esc)   clickedIndex = 0; // ESC resumes
+
+        if (clickedIndex == 0)
+        {
+            setState(GameState::Playing);
+        }
+        else if (clickedIndex == 1)
+        {
+            resetGame();
+            setState(GameState::Playing);
+        }
+        else if (clickedIndex == 2)
+        {
+            previousMenuState_ = GameState::Paused;
+            state_ = GameState::LocationSelect;
+        }
+        else if (clickedIndex == 3)
+        {
+            previousMenuState_ = GameState::Paused;
+            state_ = GameState::TimeLightingMenu;
+        }
+        else if (clickedIndex == 4)
+        {
+            previousMenuState_ = GameState::Paused;
+            state_ = GameState::SettingsMenu;
+        }
+        else if (clickedIndex == 5)
+        {
+            state_ = GameState::MainMenu;
+            menuSelectionIndex_ = 0;
+            input_.setCursorCaptured(false);
+        }
+    }
+}
+
 void Game::update(float dt)
 {
     input_.update();
 
-    if (input_.pressed(GLFW_KEY_ESCAPE)) glfwSetWindowShouldClose(window_, GLFW_TRUE);
+    if (input_.pressed(GLFW_KEY_ESCAPE))
+    {
+        if (state_ == GameState::Playing)
+        {
+            if (showInGameLighting_)
+            {
+                showInGameLighting_ = false;
+            }
+            else
+            {
+                setState(GameState::Paused);
+                menuSelectionIndex_ = 0;
+                return;
+            }
+        }
+    }
+
+    // Toggle In-Game Quick Lighting Controls with F6
+    if (state_ == GameState::Playing && input_.pressed(GLFW_KEY_F6))
+    {
+        showInGameLighting_ = !showInGameLighting_;
+    }
+
+    // Quick lighting panel input handling
+    if (state_ == GameState::Playing && showInGameLighting_)
+    {
+        if (input_.pressed(GLFW_KEY_LEFT))  lightingManager_.setTimeOfDay(lightingManager_.timeOfDay() - 0.5f);
+        if (input_.pressed(GLFW_KEY_RIGHT)) lightingManager_.setTimeOfDay(lightingManager_.timeOfDay() + 0.5f);
+        if (input_.pressed(GLFW_KEY_UP))    lightingManager_.setManualAngles(lightingManager_.sunElevation() + 4.0f, lightingManager_.sunAzimuth());
+        if (input_.pressed(GLFW_KEY_DOWN))  lightingManager_.setManualAngles(lightingManager_.sunElevation() - 4.0f, lightingManager_.sunAzimuth());
+
+        for (int k = GLFW_KEY_1; k <= GLFW_KEY_7; ++k)
+        {
+            if (input_.pressed(k))
+            {
+                lightingManager_.applyPreset(static_cast<LightingPresetId>(k - GLFW_KEY_1));
+            }
+        }
+        if (input_.pressed(GLFW_KEY_ENTER) || input_.pressed(GLFW_KEY_KP_ENTER))
+        {
+            showInGameLighting_ = false;
+        }
+    }
+
+    // Menu States: Update menu navigation and orbit camera
+    if (state_ != GameState::Playing)
+    {
+        updateMenuNavigation();
+        menuOrbitYaw_ += dt * 0.12f;
+        world_.update(dt);
+        menuSystem_.update(dt);
+        lightingManager_.update(dt, true);
+        return;
+    }
+
+    // In-game reset with R
     if (input_.pressed(GLFW_KEY_R)) resetGame();
 
     // Cursor toggle with TAB
@@ -178,7 +598,7 @@ void Game::update(float dt)
         justRecaptured = true;
     }
 
-    // Toggle on-screen controls help with H or F1
+    // Toggle controls overlay with H or F1
     if (input_.pressed(GLFW_KEY_H) || input_.pressed(GLFW_KEY_F1))
     {
         hud_.toggleHelp();
@@ -187,6 +607,7 @@ void Game::update(float dt)
     world_.update(dt);
     hud_.update(dt);
     particles_.update(dt);
+    lightingManager_.update(dt, false);
 
     // Timers & cooldowns
     playerStealCooldown_ = std::max(0.0f, playerStealCooldown_ - dt);
@@ -228,7 +649,7 @@ void Game::update(float dt)
     }
 
     // ---- 1. Locomotion & AI Updates --------------------------------------
-    if (!matchOver_)
+    if (!matchOver_ && !showInGameLighting_)
     {
         // Player horse locomotion
         horses_[0].update(dt, input_, world_);
@@ -239,7 +660,6 @@ void Game::update(float dt)
         horses_[0].update(dt, idle, world_);
     }
 
-    // Collect candidate requests for pickup and stealing
     struct PickupCandidate
     {
         int index;
@@ -317,7 +737,8 @@ void Game::update(float dt)
     }
 
     // ---- 4. Player Interaction (E key or LMB = Steal / Pickup / Throw) ----
-    const bool actionTriggered = !matchOver_ && (input_.pressed(GLFW_KEY_E) ||
+    const bool actionTriggered = !matchOver_ && !showInGameLighting_ &&
+                                 (input_.pressed(GLFW_KEY_E) ||
                                  (!justRecaptured && input_.isCursorCaptured() && input_.mousePressed(GLFW_MOUSE_BUTTON_LEFT)));
 
     if (actionTriggered)
@@ -370,7 +791,6 @@ void Game::update(float dt)
             }
             else
             {
-                // Missed attempt
                 playerStealCooldown_ = 0.4f;
             }
         }
@@ -389,7 +809,6 @@ void Game::update(float dt)
     // ---- 5. Authoritative Resolution of Simultaneous Pickups & Steals -----
     if (carrierIndex_ == -1 && !pickupCandidates.empty() && goat_.state() == Goat::State::Idle)
     {
-        // Deterministic: closest rider wins the pickup
         std::sort(pickupCandidates.begin(), pickupCandidates.end(),
                   [](const PickupCandidate& a, const PickupCandidate& b) {
                       return a.distSq < b.distSq;
@@ -413,7 +832,6 @@ void Game::update(float dt)
 
     if (carrierIndex_ >= 0 && !stealCandidates.empty())
     {
-        // Deterministic: closest stealer in valid cone takes possession
         std::sort(stealCandidates.begin(), stealCandidates.end(),
                   [](const StealCandidate& a, const StealCandidate& b) {
                       return a.dist < b.dist;
@@ -531,50 +949,106 @@ void Game::render()
     if (fbw <= 0 || fbh <= 0) return;
 
     glViewport(0, 0, fbw, fbh);
-    const glm::vec3 sky = renderer_.skyColor();
+
+    const LightingState& lighting = lightingManager_.state();
+    const glm::vec3 sky = lighting.skyColor;
     glClearColor(sky.x, sky.y, sky.z, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     const float aspect = static_cast<float>(fbw) / static_cast<float>(fbh);
-    renderer_.beginScene(camera_.view(), camera_.projection(aspect), camera_.position());
 
-    world_.draw(renderer_);
-
-    // Blob shadows for all 4 horses
-    for (size_t i = 0; i < horses_.size(); ++i)
+    if (state_ == GameState::Playing || state_ == GameState::Paused)
     {
-        drawBlobShadow(horses_[i].position(), 0.82f, 1.38f, horses_[i].yaw(), horses_[i].bobHeight());
-    }
+        // Active 3D gameplay scene
+        renderer_.beginScene(camera_.view(), camera_.projection(aspect), camera_.position(), lighting);
 
-    // Goat blob shadow when not carried
-    if (carrierIndex_ < 0 && goat_.state() != Goat::State::Carried)
+        // Sky Celestials (Sun disc, Moon disc, Night stars)
+        renderer_.drawCelestials(assets_, camera_.position(), lighting, static_cast<float>(glfwGetTime()));
+
+        world_.draw(renderer_);
+
+        // Blob shadows
+        for (size_t i = 0; i < horses_.size(); ++i)
+        {
+            drawBlobShadow(horses_[i].position(), 0.82f, 1.38f, horses_[i].yaw(), horses_[i].bobHeight());
+        }
+
+        if (carrierIndex_ < 0 && goat_.state() != Goat::State::Carried)
+        {
+            drawBlobShadow(goat_.groundPosition(), 0.45f, 0.45f, 0.0f, goat_.heightAboveGround());
+        }
+
+        // Draw horses
+        for (size_t i = 0; i < horses_.size(); ++i)
+        {
+            horses_[i].draw(renderer_);
+        }
+
+        // Pickup hint circle
+        const float dx = horses_[0].position().x - goat_.position().x;
+        const float dz = horses_[0].position().z - goat_.position().z;
+        const bool hint = (carrierIndex_ == -1 && (dx * dx + dz * dz) <= kPickupRadius * kPickupRadius);
+        goat_.draw(renderer_, hint);
+
+        particles_.draw(renderer_);
+
+        // HUD
+        hud_.draw(renderer_, assets_, fbw, fbh,
+                  scores_, carrierIndex_,
+                  matchTimer_, matchOver_, winnerIndex_,
+                  bannerMessage_, bannerTimer_,
+                  horses_[0].speed(), horses_[0].speed01(), horses_[0].gaitName(),
+                  horses_,
+                  goat_.position(), carrierIndex_ >= 0,
+                  world_.zone().center, world_.arenaRadius());
+
+        // Quick lighting overlay HUD (F6)
+        if (showInGameLighting_)
+        {
+            menuSystem_.drawInGameLightingPanel(renderer_, assets_, fbw, fbh, lightingManager_);
+        }
+
+        // Pause Menu modal overlay
+        if (state_ == GameState::Paused)
+        {
+            menuSystem_.drawPauseMenu(renderer_, assets_, fbw, fbh, menuSelectionIndex_, input_.mouseX(), input_.mouseY());
+        }
+    }
+    else
     {
-        drawBlobShadow(goat_.groundPosition(), 0.45f, 0.45f, 0.0f, goat_.heightAboveGround());
+        // Cinematic orbiting camera for Menus
+        const glm::vec3 menuCamPos(std::sin(menuOrbitYaw_) * 48.0f, 16.0f, std::cos(menuOrbitYaw_) * 48.0f);
+        const glm::mat4 menuView = glm::lookAt(menuCamPos, glm::vec3(0.0f, 3.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        const glm::mat4 menuProj = glm::perspective(glm::radians(55.0f), aspect, 0.1f, 600.0f);
+
+        renderer_.beginScene(menuView, menuProj, menuCamPos, lighting);
+
+        // Sky Celestials
+        renderer_.drawCelestials(assets_, menuCamPos, lighting, static_cast<float>(glfwGetTime()));
+
+        // Active Kazakhstan location world
+        world_.draw(renderer_);
+
+        // Render current Menu Screen
+        const LocationInfo& locInfo = locationManager_.currentInfo();
+
+        if (state_ == GameState::MainMenu)
+        {
+            menuSystem_.drawMainMenu(renderer_, assets_, fbw, fbh, menuSelectionIndex_, input_.mouseX(), input_.mouseY(), locInfo, lightingManager_);
+        }
+        else if (state_ == GameState::LocationSelect)
+        {
+            menuSystem_.drawLocationSelect(renderer_, assets_, fbw, fbh, locInfo, static_cast<int>(locInfo.id), locationManager_.count(), menuSelectionIndex_, input_.mouseX(), input_.mouseY());
+        }
+        else if (state_ == GameState::TimeLightingMenu)
+        {
+            menuSystem_.drawTimeLightingMenu(renderer_, assets_, fbw, fbh, lightingManager_, locInfo, menuSelectionIndex_, input_.mouseX(), input_.mouseY());
+        }
+        else if (state_ == GameState::SettingsMenu)
+        {
+            menuSystem_.drawSettingsMenu(renderer_, assets_, fbw, fbh, settingsManager_, menuSelectionIndex_, input_.mouseX(), input_.mouseY());
+        }
     }
-
-    // Render all 4 horses
-    for (size_t i = 0; i < horses_.size(); ++i)
-    {
-        horses_[i].draw(renderer_);
-    }
-
-    // Pickup hint circle for player when in range of idle goat
-    const float dx = horses_[0].position().x - goat_.position().x;
-    const float dz = horses_[0].position().z - goat_.position().z;
-    const bool hint = (carrierIndex_ == -1 && (dx * dx + dz * dz) <= kPickupRadius * kPickupRadius);
-    goat_.draw(renderer_, hint);
-
-    particles_.draw(renderer_);
-
-    // Draw FFA HUD
-    hud_.draw(renderer_, assets_, fbw, fbh,
-              scores_, carrierIndex_,
-              matchTimer_, matchOver_, winnerIndex_,
-              bannerMessage_, bannerTimer_,
-              horses_[0].speed(), horses_[0].speed01(), horses_[0].gaitName(),
-              horses_,
-              goat_.position(), carrierIndex_ >= 0,
-              world_.zone().center, world_.arenaRadius());
 }
 
 void Game::updateWindowTitle(float dt)
@@ -591,12 +1065,13 @@ void Game::updateWindowTitle(float dt)
         const int mins = std::max(0, static_cast<int>(matchTimer_)) / 60;
         const int secs = std::max(0, static_cast<int>(matchTimer_)) % 60;
 
-        // "\xC3\x96" is the UTF-8 encoding of the letter O with umlaut.
+        // "\xC3\x96" is UTF-8 encoding of O with umlaut
         std::snprintf(buffer, sizeof(buffer),
-                      "K\xC3\x96" "KPAR: FFA Steppe | P:%d B1:%d B2:%d B3:%d | Time: %02d:%02d | %s | %.0f FPS",
+                      "K\xC3\x96" "KPAR: Wobbly Steppe | %s | %s | P:%d B1:%d B2:%d B3:%d | Time: %02d:%02d | %.0f FPS",
+                      locationManager_.currentInfo().nameEn,
+                      lightingManager_.formattedTime().c_str(),
                       scores_[0], scores_[1], scores_[2], scores_[3],
                       mins, secs,
-                      horses_[0].gaitName(),
                       static_cast<double>(fps_));
         glfwSetWindowTitle(window_, buffer);
     }

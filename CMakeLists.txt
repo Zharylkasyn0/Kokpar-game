@@ -69,6 +69,10 @@ add_executable(kokpar
     src/Hud.cpp
     src/Particles.cpp
     src/BotAI.cpp
+    src/Lighting.cpp
+    src/Locations.cpp
+    src/Settings.cpp
+    src/Menu.cpp
 )
 
 # Note: do not add 'src' to target_include_directories; on case-insensitive filesystems (Windows),
@@ -101,6 +105,10 @@ add_executable(test_ffa
     src/Hud.cpp
     src/Particles.cpp
     src/BotAI.cpp
+    src/Lighting.cpp
+    src/Locations.cpp
+    src/Settings.cpp
+    src/Menu.cpp
 )
 target_link_libraries(test_ffa PRIVATE glad glfw glm::glm)
 target_compile_definitions(test_ffa PRIVATE GLFW_INCLUDE_NONE GLM_FORCE_RADIANS NOMINMAX)

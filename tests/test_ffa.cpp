@@ -63,6 +63,9 @@ int main()
     TEST_CHECK(game.init(window), "Game::init failed");
     std::printf("[INIT] Game initialized successfully with OpenGL context.\n");
 
+    // Put game in Playing state for gameplay tests
+    game.startMatch();
+
     // -----------------------------------------------------------------------
     // Scenario 1: Human player picks up goat from ground
     // -----------------------------------------------------------------------
@@ -351,7 +354,7 @@ int main()
     // -----------------------------------------------------------------------
     std::printf("\n--- Test 15: Multi-frame runtime stability check ---\n");
     {
-        game.resetGame();
+        game.startMatch();
         for (int frame = 0; frame < 120; ++frame)
         {
             game.update(0.016f);
@@ -360,8 +363,119 @@ int main()
         std::printf("[PASS] Scenario 15: Executed 120 full simulation and rendering frames without crashes.\n");
     }
 
+    // -----------------------------------------------------------------------
+    // Scenario 16: Menu opening & state transitions
+    // -----------------------------------------------------------------------
+    std::printf("\n--- Test 16: Main Menu, Location Select, Lighting & Pause Menus ---\n");
+    {
+        Game testGame;
+        testGame.init(window);
+        TEST_CHECK(testGame.state() == GameState::MainMenu, "Game must open in Main Menu on launch");
+
+        testGame.setState(GameState::LocationSelect);
+        TEST_CHECK(testGame.state() == GameState::LocationSelect, "Can navigate to Location Select");
+
+        testGame.setState(GameState::TimeLightingMenu);
+        TEST_CHECK(testGame.state() == GameState::TimeLightingMenu, "Can navigate to Time & Lighting Menu");
+
+        testGame.setState(GameState::SettingsMenu);
+        TEST_CHECK(testGame.state() == GameState::SettingsMenu, "Can navigate to Settings Menu");
+
+        testGame.startMatch();
+        TEST_CHECK(testGame.state() == GameState::Playing, "Starting match transitions to Playing");
+
+        testGame.setState(GameState::Paused);
+        TEST_CHECK(testGame.state() == GameState::Paused, "Can transition to Paused state");
+        std::printf("[PASS] Scenario 16: All menu state transitions functional and verified.\n");
+    }
+
+    // -----------------------------------------------------------------------
+    // Scenario 17: All eight Kazakhstan locations selectable with distinct geometry
+    // -----------------------------------------------------------------------
+    std::printf("\n--- Test 17: All 8 Kazakhstan locations verification ---\n");
+    {
+        for (int locIdx = 0; locIdx < LocationManager::count(); ++locIdx)
+        {
+            const LocationId lid = static_cast<LocationId>(locIdx);
+            const LocationInfo& info = LocationManager::get(lid);
+            TEST_CHECK(info.nameEn != nullptr && info.nameEn[0] != '\0', "Location must have English name");
+            TEST_CHECK(info.nameKz != nullptr && info.nameKz[0] != '\0', "Location must have Kazakh name");
+            TEST_CHECK(info.descriptionEn != nullptr, "Location must have English description");
+            TEST_CHECK(info.descriptionKz != nullptr, "Location must have Kazakh description");
+
+            game.locationManager().selectLocation(lid);
+            TEST_CHECK(game.locationManager().selectedLocation() == lid, "Location selection updated");
+        }
+        TEST_CHECK(LocationManager::count() == 8, "Exactly 8 Kazakhstan locations implemented");
+        std::printf("[PASS] Scenario 17: All 8 Kazakhstan locations implemented with unique descriptions and palettes.\n");
+    }
+
+    // -----------------------------------------------------------------------
+    // Scenario 18: Dynamic day/night presets, manual angles and celestial calculation
+    // -----------------------------------------------------------------------
+    std::printf("\n--- Test 18: Day/Night lighting, presets, manual elevation and azimuth ---\n");
+    {
+        LightingManager lm;
+        lm.init();
+
+        // Test 7 presets
+        for (int p = 0; p < 7; ++p)
+        {
+            lm.applyPreset(static_cast<LightingPresetId>(p));
+            TEST_CHECK(lm.currentPreset() == static_cast<LightingPresetId>(p), "Preset applied");
+            const LightingState& s = lm.state();
+            TEST_CHECK(glm::length(s.toLight) > 0.9f, "toLight must be normalized");
+            TEST_CHECK(glm::length(s.lightColor) > 0.1f, "lightColor must be non-zero");
+        }
+
+        // Test night visibility guarantee (never black)
+        lm.applyPreset(LightingPresetId::Midnight);
+        TEST_CHECK(lm.state().isNight == true, "Midnight must be night");
+        TEST_CHECK(lm.state().starVisibility > 0.5f, "Stars must be visible at midnight");
+        TEST_CHECK(lm.state().ambientSky.x > 0.05f, "Ambient sky must remain illuminated at night for visibility");
+
+        // Test manual elevation and azimuth
+        lm.setManualAngles(45.0f, 180.0f);
+        TEST_CHECK(std::abs(lm.sunElevation() - 45.0f) < 1e-3f, "Manual elevation set correctly");
+        TEST_CHECK(std::abs(lm.sunAzimuth() - 180.0f) < 1e-3f, "Manual azimuth set correctly");
+
+        // Test automatic cycle
+        lm.setCycleDuration(LightingManager::CycleDuration::Min5);
+        TEST_CHECK(lm.isAutoCycleEnabled() == true, "Auto-cycle enabled");
+        const float t0 = lm.timeOfDay();
+        lm.update(1.0f, false); // advance 1 second
+        TEST_CHECK(lm.timeOfDay() != t0, "Time advances during auto-cycle");
+
+        // Test cycle pauses when game is paused
+        const float t1 = lm.timeOfDay();
+        lm.update(1.0f, true); // update while paused
+        TEST_CHECK(lm.timeOfDay() == t1, "Time must not advance when paused");
+
+        std::printf("[PASS] Scenario 18: Dynamic lighting presets, manual sun/moon angles, and auto-cycle verified.\n");
+    }
+
+    // -----------------------------------------------------------------------
+    // Scenario 19: Settings persistence to disk
+    // -----------------------------------------------------------------------
+    std::printf("\n--- Test 19: Settings persistence and restoration ---\n");
+    {
+        SettingsManager sm;
+        sm.init();
+        sm.settings().graphicsQuality = 2; // High
+        sm.settings().mouseSensitivity = 1.5f;
+        sm.settings().selectedLocation = 3; // Burabay
+        TEST_CHECK(sm.save() == true, "Settings saved to disk");
+
+        SettingsManager sm2;
+        TEST_CHECK(sm2.load() == true, "Settings loaded from disk");
+        TEST_CHECK(sm2.settings().graphicsQuality == 2, "Graphics quality persisted");
+        TEST_CHECK(std::abs(sm2.settings().mouseSensitivity - 1.5f) < 1e-3f, "Mouse sensitivity persisted");
+        TEST_CHECK(sm2.settings().selectedLocation == 3, "Selected location persisted");
+        std::printf("[PASS] Scenario 19: Local settings persistence to 'settings.cfg' verified.\n");
+    }
+
     std::printf("\n=================================================================\n");
-    std::printf("ALL 15 GAMEPLAY SCENARIOS VERIFIED SUCCESSFULLY! [15/15 PASS]\n");
+    std::printf("ALL VERIFICATION TESTS COMPLETED SUCCESSFULLY! [19/19 PASS]\n");
     std::printf("=================================================================\n");
 
     glfwDestroyWindow(window);

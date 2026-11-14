@@ -14,14 +14,29 @@
 #include "Horse.h"
 #include "Hud.h"
 #include "Input.h"
+#include "Lighting.h"
+#include "Locations.h"
+#include "Menu.h"
 #include "Particles.h"
 #include "Renderer.h"
+#include "Settings.h"
 #include "World.h"
 
 struct GLFWwindow;
 
+enum class GameState
+{
+    MainMenu,
+    LocationSelect,
+    TimeLightingMenu,
+    SettingsMenu,
+    Playing,
+    Paused
+};
+
 // Top-level game: owns all subsystems and runs update/render each frame.
 // Free-for-All Mode: 1 human player + 3 autonomous AI bots.
+// Menus: Kazakh Cultural Main Menu, Location Selection, Time & Lighting, Settings, Pause Menu.
 class Game
 {
 public:
@@ -29,6 +44,21 @@ public:
     void resetGame();
     void update(float dt);
     void render();
+
+    // Game state management
+    GameState state() const { return state_; }
+    void setState(GameState s);
+    void startMatch();
+
+    // Subsystem accessors
+    LocationManager& locationManager() { return locationManager_; }
+    const LocationManager& locationManager() const { return locationManager_; }
+
+    LightingManager& lightingManager() { return lightingManager_; }
+    const LightingManager& lightingManager() const { return lightingManager_; }
+
+    SettingsManager& settingsManager() { return settingsManager_; }
+    const SettingsManager& settingsManager() const { return settingsManager_; }
 
     // Inspection accessors for gameplay verification & tests
     int carrierIndex() const { return carrierIndex_; }
@@ -59,6 +89,9 @@ private:
     void setBannerMessage(const std::string& msg, float duration);
     void resolveHorseCollisions();
 
+    void updateMenuNavigation();
+    void applyLoadedSettings();
+
     static constexpr float kPickupRadius = 2.8f;
     static constexpr float kStealRange = 3.2f;
     static constexpr float kStealAngleMax = 1.92f; // ~110 degrees total frontal cone
@@ -70,6 +103,18 @@ private:
     Renderer renderer_;
     Assets assets_;
     World world_;
+
+    // Core managers
+    LocationManager locationManager_;
+    LightingManager lightingManager_;
+    SettingsManager settingsManager_;
+    MenuSystem menuSystem_;
+
+    GameState state_ = GameState::MainMenu;
+    GameState previousMenuState_ = GameState::MainMenu;
+    int menuSelectionIndex_ = 0;
+    bool showInGameLighting_ = false;
+    float menuOrbitYaw_ = 0.0f;
 
     // Four FFA participants: index 0 = Player, 1 = Bot 1, 2 = Bot 2, 3 = Bot 3
     std::array<Horse, 4> horses_;
