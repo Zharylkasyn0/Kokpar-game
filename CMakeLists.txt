@@ -68,6 +68,7 @@ add_executable(kokpar
     src/Goat.cpp
     src/Hud.cpp
     src/Particles.cpp
+    src/BotAI.cpp
 )
 
 # Note: do not add 'src' to target_include_directories; on case-insensitive filesystems (Windows),
@@ -80,6 +81,34 @@ if(MSVC)
     target_compile_options(kokpar PRIVATE /W4 /utf-8)
 else()
     target_compile_options(kokpar PRIVATE -Wall -Wextra)
+endif()
+
+# ---------------------------------------------------------------------------
+# Test executable (Automated FFA verification)
+# ---------------------------------------------------------------------------
+add_executable(test_ffa
+    tests/test_ffa.cpp
+    src/Game.cpp
+    src/Input.cpp
+    src/Shader.cpp
+    src/Mesh.cpp
+    src/Assets.cpp
+    src/Renderer.cpp
+    src/Camera.cpp
+    src/World.cpp
+    src/Horse.cpp
+    src/Goat.cpp
+    src/Hud.cpp
+    src/Particles.cpp
+    src/BotAI.cpp
+)
+target_link_libraries(test_ffa PRIVATE glad glfw glm::glm)
+target_compile_definitions(test_ffa PRIVATE GLFW_INCLUDE_NONE GLM_FORCE_RADIANS NOMINMAX)
+
+if(MSVC)
+    target_compile_options(test_ffa PRIVATE /W4 /utf-8)
+else()
+    target_compile_options(test_ffa PRIVATE -Wall -Wextra)
 endif()
 
 # Make Visual Studio start-up project / working directory sane.

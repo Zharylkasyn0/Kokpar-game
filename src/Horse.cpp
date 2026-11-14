@@ -462,17 +462,30 @@ void Horse::computeGallop(float phase, float legAmp, float sprintFactor,
 
 void Horse::update(float dt, const Input& in, const World& world)
 {
+    HorseControlInput ctrl;
+    ctrl.forward = in.down(GLFW_KEY_W) || in.down(GLFW_KEY_UP);
+    ctrl.backward = in.down(GLFW_KEY_S) || in.down(GLFW_KEY_DOWN);
+    ctrl.left = in.down(GLFW_KEY_A) || in.down(GLFW_KEY_LEFT);
+    ctrl.right = in.down(GLFW_KEY_D) || in.down(GLFW_KEY_RIGHT);
+    ctrl.sprint = in.down(GLFW_KEY_LEFT_SHIFT) || in.down(GLFW_KEY_RIGHT_SHIFT);
+    ctrl.brake = in.down(GLFW_KEY_SPACE);
+    update(dt, ctrl, world);
+}
+
+void Horse::update(float dt, const HorseControlInput& ctrl, const World& world)
+{
     dt = std::max(dt, 1e-4f);
     time_ += dt;
     bumpCooldown_ = std::max(0.0f, bumpCooldown_ - dt);
+    stealTimer_ = std::max(0.0f, stealTimer_ - dt);
 
-    // ---- 1. Player Input & Target Speed ----------------------------------
-    const bool wantForward = in.down(GLFW_KEY_W) || in.down(GLFW_KEY_UP);
-    const bool wantBack = in.down(GLFW_KEY_S) || in.down(GLFW_KEY_DOWN);
-    const bool wantLeft = in.down(GLFW_KEY_A) || in.down(GLFW_KEY_LEFT);
-    const bool wantRight = in.down(GLFW_KEY_D) || in.down(GLFW_KEY_RIGHT);
-    const bool sprint = in.down(GLFW_KEY_LEFT_SHIFT) || in.down(GLFW_KEY_RIGHT_SHIFT);
-    const bool quickBrake = in.down(GLFW_KEY_SPACE);
+    // ---- 1. Control Input & Target Speed ---------------------------------
+    const bool wantForward = ctrl.forward;
+    const bool wantBack = ctrl.backward;
+    const bool wantLeft = ctrl.left;
+    const bool wantRight = ctrl.right;
+    const bool sprint = ctrl.sprint;
+    const bool quickBrake = ctrl.brake;
 
     float targetSpeed = 0.0f;
     if (quickBrake)
@@ -1103,7 +1116,7 @@ void Horse::drawRider(Renderer& r, const glm::mat4& root, glm::mat4& outRider) c
     outRider = rider;
 
     // 1. Torso with traditional Kipchak tunic / vest
-    r.draw(*torsoMesh_, rider * Translate(0.0f, 0.34f, 0.0f), kVest);
+    r.draw(*torsoMesh_, rider * Translate(0.0f, 0.34f, 0.0f), vestColor_);
     // Bronze/Gold studded warrior belt
     r.draw(A.cylinder(), rider * Translate(0.0f, 0.19f, 0.0f) * Scale(0.205f, 0.060f, 0.205f), kGold);
     r.draw(A.sphere(), rider * Translate(0.0f, 0.19f, 0.21f) * Scale(0.042f, 0.042f, 0.024f), kBronzeTrim); // Belt buckle
@@ -1201,12 +1214,20 @@ void Horse::drawRider(Renderer& r, const glm::mat4& root, glm::mat4& outRider) c
             // Reaching downward-right to secure the goat on the right hip
             arm = shoulder * RotZ(0.95f) * RotX(-0.25f);
         }
+        else if (stealTimer_ > 0.0f)
+        {
+            // Steal grab/snatch reach animation: arm thrusts forward and down toward opponent
+            const float progress = 1.0f - std::clamp(stealTimer_ / 0.40f, 0.0f, 1.0f);
+            const float reach = std::sin(progress * kPi);
+            arm = shoulder * RotZ(sx * 0.35f + (side > 0 ? 0.20f * reach : 0.0f)) *
+                             RotX(-1.15f - 0.35f * reach);
+        }
         else
         {
             // Hands reach forward and slightly down over withers, gripping reins firmly
             arm = shoulder * RotZ(sx * 0.20f) * RotX(-0.80f);
         }
-        r.draw(*armMesh_, arm * Translate(0.0f, -0.16f, 0.0f), kVest);
+        r.draw(*armMesh_, arm * Translate(0.0f, -0.16f, 0.0f), vestColor_);
         // Hands with closed grip around reins
         r.draw(A.sphere(), arm * Translate(0.0f, -0.34f, 0.0f) * Scale(0.072f), kSkin);
     }

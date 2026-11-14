@@ -13,6 +13,17 @@
 #include "Renderer.h"
 #include "World.h"
 
+// Control inputs for horse locomotion (usable by both player and AI bots)
+struct HorseControlInput
+{
+    bool forward = false;
+    bool backward = false;
+    bool left = false;
+    bool right = false;
+    bool sprint = false;
+    bool brake = false;
+};
+
 // ===========================================================================
 // Anatomical Equine Character & Kipchak Warrior (v0.4)
 //
@@ -32,11 +43,33 @@ public:
     void reset(const glm::vec3& position, float yaw);
 
     void update(float dt, const Input& input, const World& world);
+    void update(float dt, const HorseControlInput& ctrl, const World& world);
     void draw(Renderer& renderer) const;
 
     // Called by Game: visual state of the rider's arm / celebration.
     void setCarrying(bool carrying) { carrying_ = carrying; }
+    bool isCarrying() const { return carrying_; }
     void cheer() { squash_.v -= 6.0f; }
+
+    // Steal reach arm animation trigger
+    void triggerStealAnim() { stealTimer_ = 0.40f; }
+    bool isStealing() const { return stealTimer_ > 0.0f; }
+
+    // Rider appearance customization (vest color)
+    void setVestColor(const glm::vec3& col) { vestColor_ = col; }
+    const glm::vec3& vestColor() const { return vestColor_; }
+
+    // Displacement / Collision resolution
+    void displace(const glm::vec2& d) { position_.x += d.x; position_.z += d.y; }
+    void displace(const glm::vec3& d) { position_ += d; }
+    void getCollisionProbes(glm::vec3& chest, glm::vec3& rump) const
+    {
+        const glm::vec3 fwd = forward();
+        chest = position_ + fwd * kProbeOffset;
+        rump  = position_ - fwd * kProbeOffset;
+    }
+    static constexpr float probeRadius() { return kProbeRadius; }
+    static constexpr float probeOffset() { return kProbeOffset; }
 
     const glm::vec3& position() const { return position_; }
     float yaw() const { return yaw_; }
@@ -136,7 +169,9 @@ private:
     float accelSmooth_ = 0.0f;
     float turnInput_ = 0.0f;
     float bumpCooldown_ = 0.0f;
+    float stealTimer_ = 0.0f;
     bool carrying_ = false;
+    glm::vec3 vestColor_ = glm::vec3(0.80f, 0.14f, 0.14f);
 
     // Gait and locomotion state
     float time_ = 0.0f;
