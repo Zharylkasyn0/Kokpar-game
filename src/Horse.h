@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <vector>
 
 #include <glm/glm.hpp>
 
@@ -13,12 +14,16 @@
 #include "World.h"
 
 // ===========================================================================
-// Realistic Equine Character (v0.2)
+// Anatomical Equine Character & Kipchak Warrior (v0.4)
 //
-// Biomechanically grounded horse with hierarchical skeletal transformations,
-// multi-segment articulated legs (knees, hocks, pasterns, hooves),
-// distinct Walk / Trot / Gallop gaits with smooth speed-based blending,
-// momentum physics, and dynamic rider stabilization.
+// Biomechanically grounded horse with natural equine silhouette:
+// sculpted withers, deep keel chest, muscular sloping scapulae,
+// tapered athletic flank tuck-up, rounded croup and powerful haunches,
+// arched crested neck with throatlatch, chiseled equine head with large
+// ganache jowls, tapered muzzle with flared nostrils, and calibrated
+// leg joints with flush ground-contact hooves.
+// Rider features a medieval Kipchak conical iron helmet with bronze brow
+// band, protective cheek guards, chainmail aventail, and bold moustache.
 // ===========================================================================
 class Horse
 {
@@ -39,25 +44,28 @@ public:
     float speed01() const { return std::min(1.0f, std::abs(speed_) / kSprintSpeed); }
     float bobHeight() const { return bobY_; }
     glm::vec3 forward() const { return glm::vec3(std::sin(yaw_), 0.0f, std::cos(yaw_)); }
-    glm::vec3 right() const { return glm::vec3(-std::cos(yaw_), 0.0f, std::sin(yaw_)); }
+    glm::vec3 right() const { return glm::vec3(std::cos(yaw_), 0.0f, -std::sin(yaw_)); }
     glm::vec3 velocity() const { return forward() * speed_; }
+
+    const char* gaitName() const;
+    void getHoofStrikes(std::vector<glm::vec3>& outStrikes) const { outStrikes = currentHoofStrikes_; }
 
     // World transform of the point where the goat is held (right hip of the rider).
     glm::mat4 carryAnchor() const;
 
 private:
     // Speed tiers for distinct equine gaits
-    static constexpr float kWalkMaxSpeed  = 3.6f;
-    static constexpr float kTrotMaxSpeed  = 7.4f;
-    static constexpr float kSprintSpeed   = 13.5f;
-    static constexpr float kReverseSpeed  = 2.8f;
-    static constexpr float kAcceleration  = 9.5f;
-    static constexpr float kBrake         = 20.0f;
-    static constexpr float kTurnRate      = 2.5f;
+    static constexpr float kWalkMaxSpeed = 3.8f;
+    static constexpr float kTrotMaxSpeed = 7.8f;
+    static constexpr float kSprintSpeed = 13.8f;
+    static constexpr float kReverseSpeed = 3.0f;
+    static constexpr float kAcceleration = 10.5f;
+    static constexpr float kBrake = 22.0f;
+    static constexpr float kTurnRate = 2.7f;
 
-    // Collision probes (chest and rump)
-    static constexpr float kProbeRadius   = 0.65f;
-    static constexpr float kProbeOffset   = 0.72f;
+    // Collision probes (chest and rump) calibrated for compact body
+    static constexpr float kProbeRadius = 0.55f;
+    static constexpr float kProbeOffset = 0.50f;
 
     // Leg indices for locomotion
     enum LegIndex {
@@ -75,43 +83,50 @@ private:
         float lift = 0.0f;     // Vertical foot clearance above ground
     };
 
-    // Locomotion solvers for the three gaits
+    // Locomotion solvers for the two gaits (WALK & GALLOP)
     void computeWalk(float phase, float legAmp, std::array<LegAngles, 4>& outAngles,
-                     float& outBob, float& outPitch) const;
-    void computeTrot(float phase, float legAmp, std::array<LegAngles, 4>& outAngles,
-                     float& outBob, float& outPitch) const;
+        float& outBob, float& outPitch) const;
     void computeGallop(float phase, float legAmp, float sprintFactor, std::array<LegAngles, 4>& outAngles,
-                      float& outBob, float& outPitch) const;
+        float& outBob, float& outPitch) const;
 
     // Drawing helper methods for anatomical sub-assemblies
     void drawTorso(Renderer& r, const glm::mat4& root) const;
-    void drawNeckAndHead(Renderer& r, const glm::mat4& root, float s01, float gaitPitch) const;
+    void drawNeckAndHead(Renderer& r, const glm::mat4& root, float s01, float gaitPitch, glm::mat4& outHead) const;
+    void drawBridle(Renderer& r, const glm::mat4& head) const;
+    void drawReins(Renderer& r, const glm::mat4& head, const glm::mat4& rider) const;
     void drawForeleg(Renderer& r, const glm::mat4& root, int side, const LegAngles& angles) const;
     void drawHindleg(Renderer& r, const glm::mat4& root, int side, const LegAngles& angles) const;
     void drawTail(Renderer& r, const glm::mat4& root, float s01) const;
     void drawSaddleAndTack(Renderer& r, const glm::mat4& root) const;
-    void drawRider(Renderer& r, const glm::mat4& root) const;
+    void drawRider(Renderer& r, const glm::mat4& root, glm::mat4& outRider) const;
 
     const Assets* assets_ = nullptr;
 
     // Anatomical procedural mesh pointers
+    const Mesh* horseBodyMesh_ = nullptr;
+    const Mesh* horseNeckMesh_ = nullptr;
+    const Mesh* horseHeadMesh_ = nullptr;
     const Mesh* chestMesh_ = nullptr;
     const Mesh* barrelMesh_ = nullptr;
     const Mesh* croupMesh_ = nullptr;
+    const Mesh* scapulaMesh_ = nullptr;
     const Mesh* neckLowerMesh_ = nullptr;
     const Mesh* neckUpperMesh_ = nullptr;
-    const Mesh* headMesh_ = nullptr;
+    const Mesh* nasalMesh_ = nullptr;
     const Mesh* muzzleMesh_ = nullptr;
     const Mesh* foreUpperMesh_ = nullptr;
+    const Mesh* forearmMesh_ = nullptr;
     const Mesh* foreLowerMesh_ = nullptr;
     const Mesh* hindUpperMesh_ = nullptr;
     const Mesh* hindMidMesh_ = nullptr;
     const Mesh* hindLowerMesh_ = nullptr;
     const Mesh* pasternMesh_ = nullptr;
     const Mesh* tailMesh_ = nullptr;
+    const Mesh* bitRingMesh_ = nullptr;
     const Mesh* torsoMesh_ = nullptr;
     const Mesh* riderLegMesh_ = nullptr;
     const Mesh* armMesh_ = nullptr;
+    const Mesh* moustacheMesh_ = nullptr;
 
     // Kinematics and world placement
     glm::vec3 position_ = glm::vec3(0.0f);
@@ -129,6 +144,8 @@ private:
     float bobY_ = 0.0f;          // Procedural vertical bobbing
     float bodyPitch_ = 0.0f;     // Procedural pitch from gait & weight transfer
     std::array<LegAngles, 4> legAngles_{};
+    std::array<float, 4> prevLift_{};
+    mutable std::vector<glm::vec3> currentHoofStrikes_;
 
     // Secondary physics springs
     Spring roll_;               // Centrifugal banking into turns

@@ -26,6 +26,11 @@ public:
     double mouseDeltaY() const { return deltaY_; }
     float scrollDeltaY() const { return scrollY_; }
 
+    // Cursor capture mode (GLFW_CURSOR_DISABLED for modern TPS camera)
+    void setCursorCaptured(bool captured);
+    bool isCursorCaptured() const { return cursorCaptured_; }
+    void toggleCursorCaptured() { setCursorCaptured(!cursorCaptured_); }
+
     // Internal callback handler for GLFW scroll events
     void onScroll(double yoffset) { pendingScroll_ += static_cast<float>(yoffset); }
 
@@ -45,6 +50,7 @@ private:
     double deltaX_ = 0.0;
     double deltaY_ = 0.0;
     bool firstCursor_ = true;
+    bool cursorCaptured_ = true;
 
     float pendingScroll_ = 0.0f;
     float scrollY_ = 0.0f;

@@ -62,17 +62,21 @@ void main()
 
     float ndl = dot(N, L);
     float d = max(ndl, 0.0);
-    // Soft toon: blend smooth diffuse with 4 quantised bands.
-    float toon = mix(d, floor(d * 3.0 + 0.5) / 3.0, 0.45);
+    // Refined soft toon shading: 4 distinct stepped cel bands
+    float toon = mix(d, floor(d * 4.0 + 0.5) / 4.0, 0.42);
 
-    vec3 ambient = mix(uAmbientGround, uAmbientSky, N.y * 0.5 + 0.5);
+    // Hemispheric ambient lighting with subtle ground proximity ambient occlusion
+    float ao = clamp(vWorldPos.y * 1.2 + 0.25, 0.72, 1.0);
+    vec3 ambient = mix(uAmbientGround, uAmbientSky, N.y * 0.5 + 0.5) * ao;
 
+    // Specular and rim highlights
     vec3 H = normalize(L + V);
-    float spec = pow(max(dot(N, H), 0.0), 40.0) * 0.18 * step(0.0, ndl);
-    float rim = pow(1.0 - max(dot(N, V), 0.0), 3.0) * 0.16;
+    float spec = pow(max(dot(N, H), 0.0), 32.0) * 0.22 * step(0.05, ndl);
+    float rim = pow(1.0 - max(dot(N, V), 0.0), 3.0) * 0.18;
 
     vec3 color = uColor * (ambient + uLightColor * toon) + uLightColor * spec + vec3(rim);
 
+    // Atmospheric distance fog smoothly fading into the sky
     float dist = length(uCamPos - vWorldPos);
     float fog = clamp((dist - uFogStart) / (uFogEnd - uFogStart), 0.0, 1.0);
     color = mix(color, uFogColor, fog);
@@ -105,7 +109,6 @@ bool Renderer::init()
     glEnable(GL_MULTISAMPLE);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    // Face culling is intentionally left disabled: robust against any winding mistakes.
     return true;
 }
 
@@ -117,10 +120,11 @@ void Renderer::beginScene(const glm::mat4& view, const glm::mat4& projection, co
     const glm::mat4 viewProj = projection * view;
     glUniformMatrix4fv(uViewProj_, 1, GL_FALSE, glm::value_ptr(viewProj));
 
-    const glm::vec3 toLight = glm::normalize(glm::vec3(-0.45f, 0.80f, 0.40f));
-    const glm::vec3 lightColor(0.95f, 0.90f, 0.78f);
-    const glm::vec3 ambientSky(0.44f, 0.50f, 0.60f);
-    const glm::vec3 ambientGround(0.30f, 0.27f, 0.20f);
+    // Warm golden steppe sun
+    const glm::vec3 toLight = glm::normalize(glm::vec3(-0.45f, 0.85f, 0.40f));
+    const glm::vec3 lightColor(1.00f, 0.94f, 0.80f);
+    const glm::vec3 ambientSky(0.48f, 0.56f, 0.68f);
+    const glm::vec3 ambientGround(0.34f, 0.30f, 0.22f);
     const glm::vec3 fogColor = skyColor();
 
     glUniform3fv(uLightDir_, 1, glm::value_ptr(toLight));
@@ -129,8 +133,8 @@ void Renderer::beginScene(const glm::mat4& view, const glm::mat4& projection, co
     glUniform3fv(uAmbientGround_, 1, glm::value_ptr(ambientGround));
     glUniform3fv(uCamPos_, 1, glm::value_ptr(cameraPos));
     glUniform3fv(uFogColor_, 1, glm::value_ptr(fogColor));
-    glUniform1f(uFogStart_, 70.0f);
-    glUniform1f(uFogEnd_, 280.0f);
+    glUniform1f(uFogStart_, 80.0f);
+    glUniform1f(uFogEnd_, 310.0f);
 }
 
 void Renderer::submit(const Mesh& mesh, const glm::mat4& model, const glm::vec3& color, float alpha, bool unlit)

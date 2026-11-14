@@ -11,6 +11,7 @@
 #include "Horse.h"
 #include "Hud.h"
 #include "Input.h"
+#include "Particles.h"
 #include "Renderer.h"
 #include "World.h"
 
@@ -41,6 +42,7 @@ private:
     Goat goat_;
     FollowCamera camera_;
     Hud hud_;
+    Particles particles_;
 
     std::vector<glm::vec3> spawnPoints_;
     size_t spawnIndex_ = 0;

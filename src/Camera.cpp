@@ -13,7 +13,7 @@
 void FollowCamera::resetOffsets()
 {
     userYaw_ = 0.0f;
-    userPitch_ = 0.0f;
+    userPitch_ = 0.18f;
     userDistance_ = 0.0f;
     userHeight_ = 0.0f;
     orbitYaw_ = 0.0f;
@@ -25,23 +25,21 @@ void FollowCamera::setMode(Mode mode)
     mode_ = mode;
 }
 
-void FollowCamera::cycleMode()
+void FollowCamera::cycleMode(float currentYaw)
 {
     switch (mode_)
     {
     case Mode::Follow:
         mode_ = Mode::FreeOrbit;
-        // Seed orbit yaw from current view angle
-        orbitYaw_ = WrapAngle(userYaw_);
+        orbitYaw_ = WrapAngle(currentYaw + userYaw_);
         userYaw_ = 0.0f;
         break;
     case Mode::FreeOrbit:
         mode_ = Mode::Cinematic;
-        userYaw_ = 0.0f;
+        userYaw_ = WrapAngle(orbitYaw_ - currentYaw);
         break;
     case Mode::Cinematic:
         mode_ = Mode::Follow;
-        userYaw_ = 0.0f;
         break;
     }
 }
@@ -70,7 +68,7 @@ void FollowCamera::snapTo(const glm::vec3& target, float yaw)
     position_ = desiredPos;
     lookAt_ = desiredLook;
     fovDegrees_ = desiredFov;
-    position_.y = std::max(position_.y, 0.45f);
+    position_.y = std::max(position_.y, kMinTerrainClearance);
 }
 
 void FollowCamera::computeTargetTransform(const glm::vec3& target, float yaw, float speed01,
@@ -78,6 +76,11 @@ void FollowCamera::computeTargetTransform(const glm::vec3& target, float yaw, fl
 {
     const glm::vec3 fwd(std::sin(yaw), 0.0f, std::cos(yaw));
 
+    const glm::vec3 bodyTarget = target + glm::vec3(
+        0.0f * std::cos(yaw),
+        0.0f,
+        0.0f * std::sin(yaw)
+    );
     float dist = 0.0f;
     float baseH = 0.0f;
     float totalYaw = 0.0f;
@@ -89,9 +92,9 @@ void FollowCamera::computeTargetTransform(const glm::vec3& target, float yaw, fl
     {
         const float baseDist = kBaseDistance + speed01 * kExtraDistance;
         dist = std::clamp(baseDist + userDistance_, kMinDistance, kMaxDistance);
-        baseH = kBaseHeight + speed01 * 0.5f;
+        baseH = kBaseHeight + speed01 * 0.45f;
         totalYaw = yaw + userYaw_;
-        outLook = target + fwd * (1.8f + speed01 * 1.5f) + glm::vec3(0.0f, kLookHeight + userHeight_ * 0.2f, 0.0f);
+        outLook = bodyTarget + fwd * (1.6f + speed01 * 1.4f) + glm::vec3(0.0f, kLookHeight + userHeight_ * 0.2f, 0.0f);
         outFov = kBaseFov + speed01 * kFovBoost;
         break;
     }
@@ -100,17 +103,17 @@ void FollowCamera::computeTargetTransform(const glm::vec3& target, float yaw, fl
         dist = std::clamp(kBaseDistance + userDistance_, kMinDistance, kMaxDistance);
         baseH = kBaseHeight;
         totalYaw = orbitYaw_;
-        outLook = target + glm::vec3(0.0f, kLookHeight + userHeight_ * 0.2f, 0.0f);
+        outLook = bodyTarget + glm::vec3(0.0f, kLookHeight + userHeight_ * 0.2f, 0.0f);
         outFov = kBaseFov;
         break;
     }
     case Mode::Cinematic:
     {
-        const float baseDist = 11.5f + speed01 * 1.8f;
+        const float baseDist = 11.0f + speed01 * 1.6f;
         dist = std::clamp(baseDist + userDistance_, kMinDistance, kMaxDistance);
-        baseH = 2.6f;
+        baseH = 2.4f;
         totalYaw = yaw + userYaw_;
-        outLook = target + fwd * (2.0f + speed01 * 1.2f) + glm::vec3(0.0f, 1.4f + userHeight_ * 0.2f, 0.0f);
+        outLook = bodyTarget + fwd * (1.8f + speed01 * 1.0f) + glm::vec3(0.0f, 1.35f + userHeight_ * 0.2f, 0.0f);
         outFov = 75.0f + speed01 * 5.0f;
         break;
     }
@@ -122,9 +125,9 @@ void FollowCamera::computeTargetTransform(const glm::vec3& target, float yaw, fl
 
     const float dx = -std::sin(totalYaw) * hDist;
     const float dz = -std::cos(totalYaw) * hDist;
-    const float dy = std::max(0.45f, baseH + userHeight_ + vDist);
+    const float dy = std::max(kMinTerrainClearance, baseH + userHeight_ + vDist);
 
-    outPos = target + glm::vec3(dx, dy, dz);
+    outPos = bodyTarget + glm::vec3(dx, dy, dz);
 }
 
 void FollowCamera::update(float dt, const Input& in, const glm::vec3& target, float yaw, float speed01)
@@ -132,32 +135,50 @@ void FollowCamera::update(float dt, const Input& in, const glm::vec3& target, fl
     // ---- 1. Camera Mode Toggle (C) ---------------------------------------
     if (in.pressed(GLFW_KEY_C))
     {
-        cycleMode();
+        cycleMode(yaw);
     }
 
-    // ---- 2. Camera Reset (R) ---------------------------------------------
-    if (in.pressed(GLFW_KEY_R))
+    // ---- 2. Dedicated Camera Reset (Z or V) ------------------------------
+    if (in.pressed(GLFW_KEY_Z) || in.pressed(GLFW_KEY_V))
     {
         resetOffsets();
     }
 
-    // ---- 3. Mouse RMB Orbit Rotation -------------------------------------
-    if (in.mouseDown(GLFW_MOUSE_BUTTON_RIGHT))
+    // ---- 3. Modern Mouse Orbit (Enabled whenever cursor is captured) -----
+    // Full 360-degree horizontal orbit and clamped vertical pitch
+    if (in.isCursorCaptured())
     {
-        const float rotSpeed = 0.0035f;
-        const float dx = static_cast<float>(in.mouseDeltaX());
-        const float dy = static_cast<float>(in.mouseDeltaY());
+        const float dx = static_cast<float>(in.mouseDeltaX()) * mouseSensitivity_;
+        const float dy = static_cast<float>(in.mouseDeltaY()) * mouseSensitivity_;
 
         if (mode_ == Mode::FreeOrbit)
         {
-            orbitYaw_ = WrapAngle(orbitYaw_ - dx * rotSpeed);
+            orbitYaw_ = WrapAngle(orbitYaw_ - dx);
         }
         else
         {
-            userYaw_ = WrapAngle(userYaw_ - dx * rotSpeed);
+            userYaw_ = WrapAngle(userYaw_ - dx);
         }
 
-        userPitch_ += dy * rotSpeed;
+        userPitch_ += dy;
+        userPitch_ = std::clamp(userPitch_, kMinPitch, kMaxPitch);
+    }
+    else if (in.mouseDown(GLFW_MOUSE_BUTTON_RIGHT))
+    {
+        // Fallback for uncaptured cursor: hold RMB to orbit
+        const float dx = static_cast<float>(in.mouseDeltaX()) * mouseSensitivity_;
+        const float dy = static_cast<float>(in.mouseDeltaY()) * mouseSensitivity_;
+
+        if (mode_ == Mode::FreeOrbit)
+        {
+            orbitYaw_ = WrapAngle(orbitYaw_ - dx);
+        }
+        else
+        {
+            userYaw_ = WrapAngle(userYaw_ - dx);
+        }
+
+        userPitch_ += dy;
         userPitch_ = std::clamp(userPitch_, kMinPitch, kMaxPitch);
     }
 
@@ -165,8 +186,8 @@ void FollowCamera::update(float dt, const Input& in, const glm::vec3& target, fl
     const float scroll = in.scrollDeltaY();
     if (std::abs(scroll) > 1e-4f)
     {
-        userDistance_ -= scroll * 1.0f;
-        userDistance_ = std::clamp(userDistance_, -4.0f, 16.0f);
+        userDistance_ -= scroll * 0.95f;
+        userDistance_ = std::clamp(userDistance_, -3.5f, 12.0f);
     }
 
     // ---- 5. Height Adjustment (Page Up / Page Down) ----------------------
@@ -186,14 +207,14 @@ void FollowCamera::update(float dt, const Input& in, const glm::vec3& target, fl
     float desiredFov = kBaseFov;
     computeTargetTransform(target, yaw, speed01_, desiredPos, desiredLook, desiredFov);
 
-    float posRate = 6.5f;
-    float lookRate = 10.0f;
+    float posRate = 7.0f;
+    float lookRate = 11.0f;
     float fovRate = 4.0f;
 
     if (mode_ == Mode::FreeOrbit)
     {
-        posRate = 8.5f;
-        lookRate = 12.0f;
+        posRate = 9.0f;
+        lookRate = 13.0f;
         fovRate = 5.0f;
     }
     else if (mode_ == Mode::Cinematic)
@@ -205,7 +226,9 @@ void FollowCamera::update(float dt, const Input& in, const glm::vec3& target, fl
 
     position_ += (desiredPos - position_) * ExpSmooth(posRate, dt);
     lookAt_ += (desiredLook - lookAt_) * ExpSmooth(lookRate, dt);
-    position_.y = std::max(position_.y, 0.45f);
+
+    // Guaranteed terrain height clearance
+    position_.y = std::max(position_.y, kMinTerrainClearance);
 
     fovDegrees_ += (desiredFov - fovDegrees_) * ExpSmooth(fovRate, dt);
 }
@@ -217,5 +240,5 @@ glm::mat4 FollowCamera::view() const
 
 glm::mat4 FollowCamera::projection(float aspect) const
 {
-    return glm::perspective(glm::radians(fovDegrees_), aspect, 0.3f, 750.0f);
+    return glm::perspective(glm::radians(fovDegrees_), aspect, 0.3f, 850.0f);
 }

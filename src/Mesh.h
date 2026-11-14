@@ -47,3 +47,16 @@ Mesh MakeCylinderMesh(int slices);
 Mesh MakeConeMesh(int slices);
 // Unit cube: edge length 1, flat normals.
 Mesh MakeBoxMesh();
+// Tapered capsule along Y: top cap radius rTop, bottom cap radius rBottom, middle height.
+Mesh MakeTaperedCapsuleMesh(float rBottom, float rTop, float height, int slices = 20, int capRings = 6);
+// 5-point customizable leg segment along Y: top, upper-mid, center, lower-mid, bottom radii, and segment length.
+Mesh MakeCustomLegMesh(float rTop, float rUpperMid, float rCenter, float rLowerMid, float rBottom,
+                       float length, int slices = 20, int capRings = 6);
+// Torus centered in XZ plane: major radius (ring), minor radius (tube thickness).
+Mesh MakeTorusMesh(float majorR, float minorR, int majorSlices = 24, int minorSlices = 12);
+// Cohesive horse torso: anatomical tube from rump to sternal keel, in horse-root space.
+Mesh MakeHorseBodyMesh();
+// Cohesive horse neck: arched muscular cervical column from withers/chest to poll.
+Mesh MakeHorseNeckMesh();
+// Cohesive horse head: skull from poll to muzzle tip, local +Y toward muzzle, +Z = dorsal.
+Mesh MakeHorseHeadMesh();

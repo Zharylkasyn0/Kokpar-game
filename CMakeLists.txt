@@ -67,6 +67,7 @@ add_executable(kokpar
     src/Horse.cpp
     src/Goat.cpp
     src/Hud.cpp
+    src/Particles.cpp
 )
 
 # Note: do not add 'src' to target_include_directories; on case-insensitive filesystems (Windows),

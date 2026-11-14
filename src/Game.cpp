@@ -9,21 +9,16 @@
 
 bool Game::init(GLFWwindow* window)
 {
-    std::fprintf(stderr, "[DEBUG] Game::init start\n");
     window_ = window;
     input_.init(window);
-    std::fprintf(stderr, "[DEBUG] input_.init done\n");
 
     if (!renderer_.init()) return false;
-    std::fprintf(stderr, "[DEBUG] renderer_.init done\n");
     assets_.init();
-    std::fprintf(stderr, "[DEBUG] assets_.init done\n");
+    hud_.init();
     world_.init(assets_);
-    std::fprintf(stderr, "[DEBUG] world_.init done\n");
     horse_.init(assets_);
-    std::fprintf(stderr, "[DEBUG] horse_.init done\n");
     goat_.init(assets_);
-    std::fprintf(stderr, "[DEBUG] goat_.init done\n");
+    particles_.init(assets_);
 
     spawnPoints_ = {
         glm::vec3(-18.0f, 0.0f, -8.0f),
@@ -34,10 +29,8 @@ bool Game::init(GLFWwindow* window)
         glm::vec3(-28.0f, 0.0f, 28.0f),
         glm::vec3(30.0f, 0.0f, -8.0f),
     };
-    std::fprintf(stderr, "[DEBUG] spawnPoints_ done\n");
 
     resetGame();
-    std::fprintf(stderr, "[DEBUG] resetGame done\n");
     return true;
 }
 
@@ -48,6 +41,7 @@ void Game::resetGame()
     horse_.reset(glm::vec3(0.0f, 0.0f, -20.0f), 0.0f);
     goat_.respawn(spawnPoints_[0], 0.8f);
     camera_.snapTo(horse_.position(), horse_.yaw());
+    particles_.clear();
 }
 
 glm::vec3 Game::nextSpawn()
@@ -63,39 +57,74 @@ void Game::update(float dt)
     if (input_.pressed(GLFW_KEY_ESCAPE)) glfwSetWindowShouldClose(window_, GLFW_TRUE);
     if (input_.pressed(GLFW_KEY_R)) resetGame();
 
+    // Cursor toggle with TAB (allows freeing mouse for window/menus)
+    if (input_.pressed(GLFW_KEY_TAB)) input_.toggleCursorCaptured();
+    // Clicking window recaptures cursor (without triggering in-game actions on the same click)
+    bool justRecaptured = false;
+    if (!input_.isCursorCaptured() && input_.mousePressed(GLFW_MOUSE_BUTTON_LEFT))
+    {
+        input_.setCursorCaptured(true);
+        justRecaptured = true;
+    }
+
+    // Toggle on-screen controls help with H or F1
+    if (input_.pressed(GLFW_KEY_H) || input_.pressed(GLFW_KEY_F1))
+    {
+        hud_.toggleHelp();
+    }
+
     world_.update(dt);
+    hud_.update(dt);
     horse_.update(dt, input_, world_);
 
-    // ---- Goat interaction (E = pick up / drop) ---------------------------
+    // Emit dust puffs from galloping/trotting hooves
+    std::vector<glm::vec3> hoofStrikes;
+    horse_.getHoofStrikes(hoofStrikes);
+    for (const auto& hpos : hoofStrikes)
+    {
+        particles_.emitDust(hpos, horse_.velocity(), horse_.speed01());
+    }
+
+    // ---- Goat interaction (E key or LMB = pick up / drop) ----------------
     const float dx = horse_.position().x - goat_.position().x;
     const float dz = horse_.position().z - goat_.position().z;
     const bool inRange = (dx * dx + dz * dz) <= kPickupRadius * kPickupRadius;
 
-    if (input_.pressed(GLFW_KEY_E))
+    const bool actionTriggered = input_.pressed(GLFW_KEY_E) ||
+                                 (!justRecaptured && input_.isCursorCaptured() && input_.mousePressed(GLFW_MOUSE_BUTTON_LEFT));
+
+    if (actionTriggered)
     {
         if (goat_.state() == Goat::State::Idle && inRange)
         {
             goat_.pickUp(horse_);
+            particles_.emitPickup(goat_.position());
         }
         else if (goat_.state() == Goat::State::Carried)
         {
-            const glm::vec3 v = horse_.velocity() + horse_.right() * 2.5f + glm::vec3(0.0f, 5.0f, 0.0f);
+            // Throw with horse momentum + forward/right outward launch arc
+            const glm::vec3 v = horse_.velocity() * 1.25f + horse_.forward() * 4.2f + horse_.right() * 2.2f + glm::vec3(0.0f, 6.2f, 0.0f);
             goat_.drop(v);
         }
     }
 
     goat_.update(dt, horse_, world_);
+    particles_.update(dt);
 
     const bool carrying = (goat_.state() == Goat::State::Carried);
     horse_.setCarrying(carrying);
     world_.setZoneHighlight(carrying);
 
-    // ---- Scoring: ride into the zone while carrying the goat -------------
-    if (carrying && world_.zone().contains(horse_.position()))
+    // ---- Scoring: deposit goat into the Kazanlyk goal (carry in or throw in)
+    const bool scored = (carrying && world_.zone().contains(horse_.position())) ||
+                        (!carrying && world_.zone().contains(goat_.position()));
+    if (scored)
     {
         ++score_;
         horse_.setCarrying(false);
         horse_.cheer();
+        particles_.emitScore(world_.zone().center);
+        hud_.triggerScoreCelebration();
         goat_.respawn(nextSpawn(), static_cast<float>(score_) * 1.7f);
     }
 
@@ -129,7 +158,7 @@ void Game::render()
     world_.draw(renderer_);
 
     // Blob shadows (flat, alpha-blended, just above the ground)
-    drawBlobShadow(horse_.position(), 0.80f, 1.35f, horse_.yaw(), horse_.bobHeight());
+    drawBlobShadow(horse_.position(), 0.82f, 1.38f, horse_.yaw(), horse_.bobHeight());
     if (goat_.state() != Goat::State::Carried)
     {
         drawBlobShadow(goat_.groundPosition(), 0.45f, 0.45f, 0.0f, goat_.heightAboveGround());
@@ -142,7 +171,14 @@ void Game::render()
     const bool hint = (dx * dx + dz * dz) <= kPickupRadius * kPickupRadius;
     goat_.draw(renderer_, hint);
 
-    hud_.draw(renderer_, assets_, fbw, fbh, score_, goat_.state() == Goat::State::Carried);
+    particles_.draw(renderer_);
+
+    hud_.draw(renderer_, assets_, fbw, fbh,
+              score_, goat_.state() == Goat::State::Carried,
+              horse_.speed(), horse_.speed01(), horse_.gaitName(),
+              horse_.position(), horse_.yaw(),
+              goat_.position(), goat_.state() == Goat::State::Carried,
+              world_.zone().center, world_.arenaRadius());
 }
 
 void Game::updateWindowTitle(float dt)
@@ -155,12 +191,12 @@ void Game::updateWindowTitle(float dt)
         titleTimer_ = 0.0f;
         frameCounter_ = 0;
 
-        char buffer[200];
+        char buffer[220];
         // "\xC3\x96" is the UTF-8 encoding of the letter O with umlaut.
         std::snprintf(buffer, sizeof(buffer),
-                      "K\xC3\x96" "KPAR: Wobbly Steppe  |  Score: %d  |  %s  |  %.0f FPS  |  Cam: %s",
+                      "K\xC3\x96" "KPAR: Wobbly Steppe v0.3 | Score: %d | %s | %.0f FPS | Cam: %s",
                       score_,
-                      goat_.state() == Goat::State::Carried ? "carrying goat" : "find the goat (E)",
+                      horse_.gaitName(),
                       static_cast<double>(fps_),
                       camera_.modeName());
         glfwSetWindowTitle(window_, buffer);
