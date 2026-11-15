@@ -30,6 +30,7 @@ public:
     void setCursorCaptured(bool captured);
     bool isCursorCaptured() const { return cursorCaptured_; }
     void toggleCursorCaptured() { setCursorCaptured(!cursorCaptured_); }
+    void resetMouseDelta() { deltaX_ = 0.0; deltaY_ = 0.0; firstCursor_ = true; }
 
     // Internal callback handler for GLFW scroll events
     void onScroll(double yoffset) { pendingScroll_ += static_cast<float>(yoffset); }

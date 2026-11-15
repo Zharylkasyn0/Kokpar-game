@@ -95,8 +95,39 @@ void Game::setState(GameState s)
 
 void Game::startMatch()
 {
+    freeCamActive_ = false;
+    simPaused_ = false;
     resetGame();
     setState(GameState::Playing);
+}
+
+void Game::setFreeCam(bool enabled)
+{
+    if (freeCamActive_ == enabled) return;
+    freeCamActive_ = enabled;
+
+    if (enabled)
+    {
+        freeCam_.initFrom(camera_.position(), camera_.lookAt());
+        input_.resetMouseDelta();
+        setBannerMessage("FREE CAMERA ON: WASD FLY, Q/E DOWN/UP, SHIFT BOOST", 3.0f);
+    }
+    else
+    {
+        camera_.snapTo(horses_[0].position(), horses_[0].yaw());
+        input_.resetMouseDelta();
+        setBannerMessage("FOLLOW CAMERA RESTORED", 2.0f);
+    }
+}
+
+void Game::resetGraphicsStates()
+{
+    renderer_.setToonEnabled(true);
+    freeCamActive_ = false;
+    simPaused_ = false;
+    showFps_ = false;
+    hud_.setHelpVisible(false);
+    hud_.setManualVisible(false);
 }
 
 void Game::resetGame()
@@ -111,6 +142,7 @@ void Game::resetGame()
     winnerIndex_ = -1;
     bannerMessage_.clear();
     bannerTimer_ = 0.0f;
+    simPaused_ = false;
 
     spawnIndex_ = 0;
 
@@ -233,15 +265,15 @@ void Game::updateMenuNavigation()
         if (down) menuSelectionIndex_ = (menuSelectionIndex_ + 1) % 5;
         if (up)   menuSelectionIndex_ = (menuSelectionIndex_ + 4) % 5;
 
-        const float cardW = 390.0f * s;
-        const float cardH = 460.0f * s;
+        const float cardW = 560.0f * s;
+        const float cardH = 560.0f * s;
         const float cardX = (sw - cardW) * 0.5f;
-        const float cardY = (sh - cardH) * 0.5f - 15.0f * s;
-        const float btnW = cardW - 60.0f * s;
-        const float btnH = 42.0f * s;
-        const float btnX = cardX + 30.0f * s;
-        const float startY = cardY + cardH - 140.0f * s;
-        const float spacingY = 52.0f * s;
+        const float cardY = (sh - cardH) * 0.5f - 10.0f * s;
+        const float btnW = cardW - 70.0f * s;
+        const float btnH = 50.0f * s;
+        const float btnX = cardX + 35.0f * s;
+        const float startY = cardY + cardH - 210.0f * s;
+        const float spacingY = 58.0f * s;
 
         int clickedIndex = -1;
         for (int i = 0; i < 5; ++i)
@@ -299,26 +331,26 @@ void Game::updateMenuNavigation()
             world_.setLocation(locationManager_.selectedLocation());
         }
 
-        const float cardW = 580.0f * s;
-        const float cardH = 480.0f * s;
+        const float cardW = 760.0f * s;
+        const float cardH = 640.0f * s;
         const float cardX = (sw - cardW) * 0.5f;
         const float cardY = (sh - cardH) * 0.5f;
 
         const float prevX = cardX + 30.0f * s;
-        const float prevY = cardY + 95.0f * s;
-        const float navW = 140.0f * s;
-        const float navH = 38.0f * s;
+        const float prevY = cardY + 92.0f * s;
+        const float navW = 150.0f * s;
+        const float navH = 44.0f * s;
 
         const float nextX = cardX + cardW - 30.0f * s - navW;
         const float nextY = prevY;
 
-        const float selW = 190.0f * s;
-        const float selH = 42.0f * s;
+        const float selW = 220.0f * s;
+        const float selH = 44.0f * s;
         const float selX = cardX + (cardW - selW) * 0.5f;
-        const float selY = cardY + 93.0f * s;
+        const float selY = cardY + 92.0f * s;
 
-        const float backW = 160.0f * s;
-        const float backH = 34.0f * s;
+        const float backW = 180.0f * s;
+        const float backH = 40.0f * s;
         const float backX = cardX + (cardW - backW) * 0.5f;
         const float backY = cardY + 30.0f * s;
 
@@ -376,15 +408,17 @@ void Game::updateMenuNavigation()
             }
         }
 
-        const float cardW = 540.0f * s;
-        const float cardH = 490.0f * s;
+        const float cardW = 760.0f * s;
+        const float cardH = 620.0f * s;
         const float cardX = (sw - cardW) * 0.5f;
         const float cardY = (sh - cardH) * 0.5f;
 
-        const float pBtnW = 105.0f * s;
-        const float pBtnH = 34.0f * s;
-        const float pStartX = cardX + 32.0f * s;
-        const float pStartY = cardY + cardH - 180.0f * s;
+        const float pBtnW = 210.0f * s;
+        const float pBtnH = 52.0f * s;
+        const float pStartX = cardX + 30.0f * s;
+        const float pStartY = cardY + cardH - 210.0f * s;
+        const float pColStep = 225.0f * s;
+        const float pRowStep = 62.0f * s;
 
         const LightingPresetId presets[7] = {
             LightingPresetId::Dawn, LightingPresetId::Morning, LightingPresetId::Noon,
@@ -395,10 +429,10 @@ void Game::updateMenuNavigation()
         {
             for (int i = 0; i < 7; ++i)
             {
-                const int col = i % 4;
-                const int row = i / 4;
-                const float bx = pStartX + static_cast<float>(col) * (pBtnW + 16.0f * s);
-                const float by = pStartY - static_cast<float>(row) * (pBtnH + 12.0f * s);
+                const int col = i % 3;
+                const int row = i / 3;
+                const float bx = pStartX + static_cast<float>(col) * pColStep;
+                const float by = pStartY - static_cast<float>(row) * pRowStep;
                 if (mx >= bx && mx <= bx + pBtnW && my >= by && my <= by + pBtnH)
                 {
                     lightingManager_.applyPreset(presets[i]);
@@ -406,12 +440,12 @@ void Game::updateMenuNavigation()
             }
 
             // Bottom Buttons
-            const float btnW = 120.0f * s;
-            const float btnH = 36.0f * s;
-            const float btnY = cardY + 40.0f * s;
-            const float applyX = cardX + 50.0f * s;
+            const float btnW = 150.0f * s;
+            const float btnH = 44.0f * s;
+            const float btnY = cardY + 35.0f * s;
+            const float applyX = cardX + 60.0f * s;
             const float resetX = cardX + (cardW - btnW) * 0.5f;
-            const float backX = cardX + cardW - 50.0f * s - btnW;
+            const float backX = cardX + cardW - 60.0f * s - btnW;
 
             if (mx >= applyX && mx <= applyX + btnW && my >= btnY && my <= btnY + btnH)
             {
@@ -437,15 +471,15 @@ void Game::updateMenuNavigation()
     // =======================================================================
     else if (state_ == GameState::SettingsMenu)
     {
-        const float cardW = 520.0f * s;
-        const float cardH = 460.0f * s;
+        const float cardW = 680.0f * s;
+        const float cardH = 560.0f * s;
         const float cardX = (sw - cardW) * 0.5f;
         const float cardY = (sh - cardH) * 0.5f;
 
-        const float backW = 150.0f * s;
-        const float backH = 36.0f * s;
+        const float backW = 180.0f * s;
+        const float backH = 44.0f * s;
         const float backX = cardX + (cardW - backW) * 0.5f;
-        const float backY = cardY + 25.0f * s;
+        const float backY = cardY + 30.0f * s;
 
         if (lmb)
         {
@@ -470,15 +504,15 @@ void Game::updateMenuNavigation()
         if (down) menuSelectionIndex_ = (menuSelectionIndex_ + 1) % 6;
         if (up)   menuSelectionIndex_ = (menuSelectionIndex_ + 5) % 6;
 
-        const float cardW = 380.0f * s;
-        const float cardH = 430.0f * s;
+        const float cardW = 520.0f * s;
+        const float cardH = 540.0f * s;
         const float cardX = (sw - cardW) * 0.5f;
         const float cardY = (sh - cardH) * 0.5f;
-        const float btnW = cardW - 60.0f * s;
-        const float btnH = 38.0f * s;
-        const float btnX = cardX + 30.0f * s;
-        const float startY = cardY + cardH - 95.0f * s;
-        const float spacingY = 48.0f * s;
+        const float btnW = cardW - 70.0f * s;
+        const float btnH = 54.0f * s;
+        const float btnX = cardX + 35.0f * s;
+        const float startY = cardY + cardH - 105.0f * s;
+        const float spacingY = 62.0f * s;
 
         int clickedIndex = -1;
         for (int i = 0; i < 6; ++i)
@@ -531,6 +565,14 @@ void Game::update(float dt)
 {
     input_.update();
 
+    // Frame statistics (also used by the F2 diagnostics overlay)
+    ++totalFrames_;
+    totalTime_ += static_cast<double>(dt);
+    frameTimeMs_ = dt * 1000.0f;
+    avgFps_ = (totalTime_ > 0.0 && totalFrames_ > 0)
+            ? static_cast<float>(static_cast<double>(totalFrames_) / totalTime_)
+            : 0.0f;
+
     if (input_.pressed(GLFW_KEY_ESCAPE))
     {
         if (state_ == GameState::Playing)
@@ -541,6 +583,7 @@ void Game::update(float dt)
             }
             else
             {
+                simPaused_ = false;
                 setState(GameState::Paused);
                 menuSelectionIndex_ = 0;
                 return;
@@ -575,6 +618,64 @@ void Game::update(float dt)
         }
     }
 
+    // =======================================================================
+    // Graphics audit hotkeys (active during gameplay)
+    // =======================================================================
+    if (state_ == GameState::Playing)
+    {
+        // F3: Toon / Cel Shading ON/OFF (main demonstrated graphics technique)
+        if (input_.pressed(GLFW_KEY_F3))
+        {
+            renderer_.toggleToon();
+            setBannerMessage(renderer_.isToonEnabled()
+                                 ? "TOON / CEL SHADING: ON"
+                                 : "TOON / CEL SHADING: OFF (SMOOTH DIFFUSE)",
+                             2.2f);
+        }
+
+        // F4: Decoupled free-fly camera
+        if (input_.pressed(GLFW_KEY_F4))
+        {
+            setFreeCam(!freeCamActive_);
+        }
+
+        // P: Pause simulation & animations while keeping the camera alive
+        if (input_.pressed(GLFW_KEY_P))
+        {
+            simPaused_ = !simPaused_;
+            setBannerMessage(simPaused_ ? "SIMULATION PAUSED (P TO RESUME)" : "SIMULATION RESUMED", 2.2f);
+        }
+
+        // F2: FPS / diagnostics overlay
+        if (input_.pressed(GLFW_KEY_F2))
+        {
+            showFps_ = !showFps_;
+        }
+
+        // F1: full manual overlay; H: compact quick-controls card
+        if (input_.pressed(GLFW_KEY_F1))
+        {
+            hud_.toggleManual();
+        }
+        if (input_.pressed(GLFW_KEY_H))
+        {
+            hud_.toggleHelp();
+        }
+
+        // Adjustable sunlight: I/K or -/= elevation, J/L or [/] azimuth
+        float sunAzDelta = 0.0f;
+        float sunElevDelta = 0.0f;
+        if (input_.down(GLFW_KEY_J) || input_.down(GLFW_KEY_LEFT_BRACKET))  sunAzDelta -= 55.0f * dt;
+        if (input_.down(GLFW_KEY_L) || input_.down(GLFW_KEY_RIGHT_BRACKET)) sunAzDelta += 55.0f * dt;
+        if (input_.down(GLFW_KEY_I) || input_.down(GLFW_KEY_EQUAL))         sunElevDelta += 32.0f * dt;
+        if (input_.down(GLFW_KEY_K) || input_.down(GLFW_KEY_MINUS))         sunElevDelta -= 32.0f * dt;
+        if (sunAzDelta != 0.0f || sunElevDelta != 0.0f)
+        {
+            lightingManager_.setManualAngles(lightingManager_.sunElevation() + sunElevDelta,
+                                             lightingManager_.sunAzimuth() + sunAzDelta);
+        }
+    }
+
     // Menu States: Update menu navigation and orbit camera
     if (state_ != GameState::Playing)
     {
@@ -598,10 +699,21 @@ void Game::update(float dt)
         justRecaptured = true;
     }
 
-    // Toggle controls overlay with H or F1
-    if (input_.pressed(GLFW_KEY_H) || input_.pressed(GLFW_KEY_F1))
+    // ---- Paused simulation: freeze gameplay, keep camera / HUD responsive ----
+    if (simPaused_)
     {
-        hud_.toggleHelp();
+        if (freeCamActive_)
+        {
+            freeCam_.update(dt, input_);
+        }
+        else
+        {
+            camera_.update(dt, input_, horses_[0].position(), horses_[0].yaw(), 0.0f);
+        }
+        hud_.update(dt);
+        lightingManager_.update(dt, true);
+        updateWindowTitle(dt);
+        return;
     }
 
     world_.update(dt);
@@ -649,7 +761,7 @@ void Game::update(float dt)
     }
 
     // ---- 1. Locomotion & AI Updates --------------------------------------
-    if (!matchOver_ && !showInGameLighting_)
+    if (!matchOver_ && !showInGameLighting_ && !freeCamActive_)
     {
         // Player horse locomotion
         horses_[0].update(dt, input_, world_);
@@ -737,7 +849,7 @@ void Game::update(float dt)
     }
 
     // ---- 4. Player Interaction (E key or LMB = Steal / Pickup / Throw) ----
-    const bool actionTriggered = !matchOver_ && !showInGameLighting_ &&
+    const bool actionTriggered = !matchOver_ && !showInGameLighting_ && !freeCamActive_ &&
                                  (input_.pressed(GLFW_KEY_E) ||
                                  (!justRecaptured && input_.isCursorCaptured() && input_.mousePressed(GLFW_MOUSE_BUTTON_LEFT)));
 
@@ -928,8 +1040,15 @@ void Game::update(float dt)
         goat_.respawn(nextSpawn(), static_cast<float>(scores_[scoringParticipant]) * 1.7f);
     }
 
-    // Camera tracks human player
-    camera_.update(dt, input_, horses_[0].position(), horses_[0].yaw(), horses_[0].speed01());
+    // Camera tracks human player (or free-fly camera)
+    if (freeCamActive_)
+    {
+        freeCam_.update(dt, input_);
+    }
+    else
+    {
+        camera_.update(dt, input_, horses_[0].position(), horses_[0].yaw(), horses_[0].speed01());
+    }
     updateWindowTitle(dt);
 }
 
@@ -959,11 +1078,15 @@ void Game::render()
 
     if (state_ == GameState::Playing || state_ == GameState::Paused)
     {
-        // Active 3D gameplay scene
-        renderer_.beginScene(camera_.view(), camera_.projection(aspect), camera_.position(), lighting);
+        // Active 3D gameplay scene (follow camera or F4 free-fly camera)
+        const glm::mat4 camView = freeCamActive_ ? freeCam_.view() : camera_.view();
+        const glm::mat4 camProj = freeCamActive_ ? freeCam_.projection(aspect) : camera_.projection(aspect);
+        const glm::vec3 camPos = freeCamActive_ ? freeCam_.position() : camera_.position();
+
+        renderer_.beginScene(camView, camProj, camPos, lighting);
 
         // Sky Celestials (Sun disc, Moon disc, Night stars)
-        renderer_.drawCelestials(assets_, camera_.position(), lighting, static_cast<float>(glfwGetTime()));
+        renderer_.drawCelestials(assets_, camPos, lighting, static_cast<float>(glfwGetTime()));
 
         world_.draw(renderer_);
 
@@ -993,6 +1116,18 @@ void Game::render()
         particles_.draw(renderer_);
 
         // HUD
+        Hud::Stats hudStats;
+        hudStats.fps = fps_;
+        hudStats.avgFps = avgFps_;
+        hudStats.frameTimeMs = frameTimeMs_;
+        hudStats.drawCalls = renderer_.drawCalls();
+        hudStats.toonEnabled = renderer_.isToonEnabled();
+        hudStats.sunAzimuthDeg = lightingManager_.sunAzimuth();
+        hudStats.sunElevationDeg = lightingManager_.sunElevation();
+        hudStats.freeCam = freeCamActive_;
+        hudStats.simPaused = simPaused_;
+        hudStats.showFps = showFps_;
+
         hud_.draw(renderer_, assets_, fbw, fbh,
                   scores_, carrierIndex_,
                   matchTimer_, matchOver_, winnerIndex_,
@@ -1000,7 +1135,8 @@ void Game::render()
                   horses_[0].speed(), horses_[0].speed01(), horses_[0].gaitName(),
                   horses_,
                   goat_.position(), carrierIndex_ >= 0,
-                  world_.zone().center, world_.arenaRadius());
+                  world_.zone().center, world_.arenaRadius(),
+                  hudStats);
 
         // Quick lighting overlay HUD (F6)
         if (showInGameLighting_)
@@ -1067,11 +1203,13 @@ void Game::updateWindowTitle(float dt)
 
         // "\xC3\x96" is UTF-8 encoding of O with umlaut
         std::snprintf(buffer, sizeof(buffer),
-                      "K\xC3\x96" "KPAR: Wobbly Steppe | %s | %s | P:%d B1:%d B2:%d B3:%d | Time: %02d:%02d | %.0f FPS",
+                      "K\xC3\x96" "KPAR: Wobbly Steppe | %s | %s | P:%d B1:%d B2:%d B3:%d | %02d:%02d | Toon:%s (F3) | Cam:%s (F4) | %.0f FPS",
                       locationManager_.currentInfo().nameEn,
                       lightingManager_.formattedTime().c_str(),
                       scores_[0], scores_[1], scores_[2], scores_[3],
                       mins, secs,
+                      renderer_.isToonEnabled() ? "ON" : "OFF",
+                      freeCamActive_ ? "FREE" : "FOLLOW",
                       static_cast<double>(fps_));
         glfwSetWindowTitle(window_, buffer);
     }

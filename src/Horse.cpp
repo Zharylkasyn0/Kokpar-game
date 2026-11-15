@@ -778,30 +778,46 @@ void Horse::drawNeckAndHead(Renderer& r, const glm::mat4& root, float s01, float
         r.draw(A.sphere(), head * Translate(sx * 0.045f, 0.480f, 0.058f) * Scale(0.014f, 0.020f, 0.012f), kDark);
     }
 
-    // Small, dark expressive eyes on lateral orbital brow ridges
+    // Small, dark expressive eyes on lateral orbital brow ridges.
+    // Head space: +Y runs toward the muzzle, -Z is the top of the skull, so the
+    // eye sits high on the widest part of the skull side, seated on the surface
+    // (the raw orbital centre is kept just inside so the eye is not buried).
     for (int side = -1; side <= 1; side += 2)
     {
         const float sx = static_cast<float>(side);
-        // Dark eye
-        r.draw(A.sphere(), head * Translate(sx * 0.105f, 0.210f, 0.050f) * Scale(0.020f), kDark);
-        // Specular highlight dot
-        r.draw(A.sphere(), head * Translate(sx * 0.113f, 0.215f, 0.056f) * Scale(0.006f), glm::vec3(1.0f));
+        const glm::vec3 eye = glm::vec3(sx * 0.132f, 0.168f, -0.050f);
+        // Dark eye, slightly proud of the skull
+        r.draw(A.sphere(), head * Translate(eye) * Scale(0.020f, 0.023f, 0.017f), kDark);
+        // Subtle specular highlight on the upper-front of the eyeball
+        r.draw(A.sphere(),
+            head * Translate(eye + glm::vec3(sx * 0.0168f, 0.0042f, -0.0075f)) * Scale(0.0048f),
+            glm::vec3(1.0f));
     }
 
-    // Two small upright ears on poll (animated with ear springs)
+    // Two pointed ears seated on top of the poll (animated by the ear springs).
+    // Head space: -Z is up and +Y points toward the muzzle, so the ears stand
+    // on the skull crown and lean slightly forward; the springs still pin them
+    // back exactly as before as speed builds.
+    const float kEarLen = 0.170f;
+    const float kEarRadius = 0.038f;
     for (int side = -1; side <= 1; side += 2)
     {
         const float sx = static_cast<float>(side);
         const int earIdx = (side < 0) ? 0 : 1;
-        const glm::mat4 ear = head * Translate(sx * 0.058f, 0.02f, -0.015f) *
+        // Base is sunk slightly into the skull crown so the join shows no gap.
+        const glm::mat4 earRoot = head *
+            Translate(sx * 0.049f, 0.048f, -0.122f) *
             RotY(-sx * 0.14f) *
-            RotX(-kHalfPi - ear_[earIdx].x) *
-            Translate(0.003f, 0.075f, 0.003f) *
-            Scale(0.038f, 0.13f, 0.038f);
-        // Outer ear shell
-        r.draw(A.cone(), ear, kCoat);
-        // Inner ear hollow
-        r.draw(A.cone(), ear * Scale(0.72f, 0.88f, 0.72f), glm::vec3(0.42f, 0.25f, 0.20f));
+            RotX(-kHalfPi + 0.32f - ear_[earIdx].x);
+        // Outer ear shell: slim cone pointing up and slightly forward
+        r.draw(A.cone(),
+            earRoot * Translate(0.0f, 0.5f * kEarLen, 0.0f) * Scale(kEarRadius, kEarLen, kEarRadius),
+            kCoat);
+        // Inner ear hollow, nudged onto the forward face of the ear
+        r.draw(A.cone(),
+            earRoot * Translate(0.0f, 0.5f * kEarLen * 0.94f, 0.30f * kEarRadius) *
+                Scale(kEarRadius * 0.52f, kEarLen * 0.74f, kEarRadius * 0.52f),
+            glm::vec3(0.50f, 0.31f, 0.24f));
     }
 
     // Forelock tuft on poll

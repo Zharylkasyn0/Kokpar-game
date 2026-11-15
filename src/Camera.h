@@ -88,3 +88,31 @@ private:
     static constexpr float kMaxHeightOffset = 5.0f;
     static constexpr float kMinTerrainClearance = 0.45f;
 };
+
+// ===========================================================================
+// Decoupled Free-Fly Camera (F4)
+// Allows flying anywhere across the Kazakhstan locations and inspecting frozen
+// animations during simulation pause (P).
+// ===========================================================================
+class FreeCamera
+{
+public:
+    void initFrom(const glm::vec3& pos, const glm::vec3& target);
+    void update(float dt, const Input& input);
+
+    glm::mat4 view() const;
+    glm::mat4 projection(float aspect) const;
+    const glm::vec3& position() const { return position_; }
+    float yaw() const { return yaw_; }
+    float pitch() const { return pitch_; }
+    glm::vec3 forward() const;
+    glm::vec3 right() const;
+
+private:
+    glm::vec3 position_ = glm::vec3(0.0f, 6.0f, -12.0f);
+    float yaw_ = 0.0f;
+    float pitch_ = -0.2f;
+    float fovDegrees_ = 65.0f;
+    float baseSpeed_ = 16.0f;
+    float mouseSensitivity_ = 0.0028f;
+};

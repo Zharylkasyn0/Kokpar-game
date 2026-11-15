@@ -32,6 +32,11 @@ public:
     void beginHud(int width, int height);
     void endHud();
 
+    // Main demonstrated graphics technique: Toon/Cel Shading toggle
+    bool isToonEnabled() const { return toonEnabled_; }
+    void setToonEnabled(bool on) { toonEnabled_ = on; }
+    void toggleToon() { toonEnabled_ = !toonEnabled_; }
+
     void setSkyColor(const glm::vec3& col) { skyColor_ = col; }
     glm::vec3 skyColor() const { return skyColor_; }
     int drawCalls() const { return drawCalls_; }
@@ -41,6 +46,7 @@ private:
 
     Shader shader_;
     int drawCalls_ = 0;
+    bool toonEnabled_ = true;
     glm::vec3 skyColor_ = glm::vec3(0.62f, 0.80f, 0.95f);
 
     // Starfield points
@@ -57,6 +63,7 @@ private:
     GLint uColor_ = -1;
     GLint uAlpha_ = -1;
     GLint uUnlit_ = -1;
+    GLint uToon_ = -1;
     GLint uLightDir_ = -1;
     GLint uLightColor_ = -1;
     GLint uAmbientSky_ = -1;

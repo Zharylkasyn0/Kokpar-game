@@ -43,6 +43,7 @@ out vec4 FragColor;
 uniform vec3  uColor;
 uniform float uAlpha;
 uniform float uUnlit;
+uniform float uToon;          // 1.0 = Toon Shading ON, 0.0 = Continuous Diffuse OFF
 
 uniform vec3  uLightDir;       // direction TOWARD the light (normalized)
 uniform vec3  uLightColor;
@@ -67,8 +68,11 @@ void main()
 
     float ndl = dot(N, L);
     float d = max(ndl, 0.0);
-    // Refined soft toon shading: 4 distinct stepped cel bands
-    float toon = mix(d, floor(d * 4.0 + 0.5) / 4.0, 0.42);
+
+    // Main demonstrated graphics technique: Toon/Cel Shading toggle
+    // ON  (uToon > 0.5): 4-band stepped lighting bands with stylized blend.
+    // OFF (uToon <= 0.5): Continuous Lambertian diffuse lighting (d = max(N.L, 0.0)).
+    float toon = (uToon > 0.5) ? mix(d, floor(d * 4.0 + 0.5) / 4.0, 0.42) : d;
 
     // Hemispheric ambient lighting with ground proximity ambient occlusion
     float ao = clamp(vWorldPos.y * 1.2 + 0.25, 0.72, 1.0);
@@ -101,6 +105,7 @@ bool Renderer::init()
     uColor_ = shader_.uniform("uColor");
     uAlpha_ = shader_.uniform("uAlpha");
     uUnlit_ = shader_.uniform("uUnlit");
+    uToon_ = shader_.uniform("uToon");
     uLightDir_ = shader_.uniform("uLightDir");
     uLightColor_ = shader_.uniform("uLightColor");
     uAmbientSky_ = shader_.uniform("uAmbientSky");
@@ -111,9 +116,21 @@ bool Renderer::init()
     uFogEnd_ = shader_.uniform("uFogEnd");
 
     glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LESS);
     glEnable(GL_MULTISAMPLE);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    // Consistent back-face culling for CCW geometry
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_BACK);
+    glFrontFace(GL_CCW);
+
+    const GLenum fbStatus = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    if (fbStatus != GL_FRAMEBUFFER_COMPLETE)
+    {
+        std::cerr << "[Renderer] Framebuffer status warning: 0x" << std::hex << fbStatus << std::dec << "\n";
+    }
 
     // Generate deterministic celestial star dome
     Rng rng(421337u);
@@ -170,6 +187,7 @@ void Renderer::beginScene(const glm::mat4& view, const glm::mat4& projection, co
     glUniform3fv(uFogColor_, 1, glm::value_ptr(lighting.fogColor));
     glUniform1f(uFogStart_, lighting.fogStart);
     glUniform1f(uFogEnd_, lighting.fogEnd);
+    glUniform1f(uToon_, toonEnabled_ ? 1.0f : 0.0f);
 }
 
 void Renderer::drawCelestials(const Assets& assets, const glm::vec3& cameraPos, const LightingState& lighting, float time)
@@ -215,6 +233,8 @@ void Renderer::drawCelestials(const Assets& assets, const glm::vec3& cameraPos, 
 
 void Renderer::submit(const Mesh& mesh, const glm::mat4& model, const glm::vec3& color, float alpha, bool unlit)
 {
+    if (unlit) glDisable(GL_CULL_FACE);
+
     const glm::mat3 normalMat = glm::transpose(glm::inverse(glm::mat3(model)));
     glUniformMatrix4fv(uModel_, 1, GL_FALSE, glm::value_ptr(model));
     glUniformMatrix3fv(uNormalMat_, 1, GL_FALSE, glm::value_ptr(normalMat));
@@ -222,6 +242,8 @@ void Renderer::submit(const Mesh& mesh, const glm::mat4& model, const glm::vec3&
     glUniform1f(uAlpha_, alpha);
     glUniform1f(uUnlit_, unlit ? 1.0f : 0.0f);
     mesh.draw();
+
+    if (unlit) glEnable(GL_CULL_FACE);
     ++drawCalls_;
 }
 
@@ -241,9 +263,11 @@ void Renderer::beginHud(int width, int height)
     const glm::mat4 ortho = glm::ortho(0.0f, static_cast<float>(width), 0.0f, static_cast<float>(height), -1.0f, 1.0f);
     glUniformMatrix4fv(uViewProj_, 1, GL_FALSE, glm::value_ptr(ortho));
     glDisable(GL_DEPTH_TEST);
+    glDisable(GL_CULL_FACE);
 }
 
 void Renderer::endHud()
 {
     glEnable(GL_DEPTH_TEST);
+    glEnable(GL_CULL_FACE);
 }

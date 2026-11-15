@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -49,6 +50,15 @@ public:
     GameState state() const { return state_; }
     void setState(GameState s);
     void startMatch();
+
+    // Graphics audit feature controls (also used by the benchmark harness)
+    void setToonEnabled(bool enabled) { renderer_.setToonEnabled(enabled); }
+    bool isToonEnabled() const { return renderer_.isToonEnabled(); }
+    bool isFreeCamActive() const { return freeCamActive_; }
+    bool isSimulationPaused() const { return simPaused_; }
+    void setFreeCam(bool enabled);
+    void setSimulationPaused(bool paused) { simPaused_ = paused; }
+    void resetGraphicsStates();
 
     // Subsystem accessors
     LocationManager& locationManager() { return locationManager_; }
@@ -138,8 +148,14 @@ private:
 
     Goat goat_;
     FollowCamera camera_;
+    FreeCamera freeCam_;
     Hud hud_;
     Particles particles_;
+
+    // Graphics audit feature state
+    bool freeCamActive_ = false;
+    bool simPaused_ = false;
+    bool showFps_ = false;
 
     std::vector<glm::vec3> spawnPoints_;
     size_t spawnIndex_ = 0;
@@ -148,4 +164,8 @@ private:
     float titleTimer_ = 0.0f;
     int frameCounter_ = 0;
     float fps_ = 0.0f;
+    float avgFps_ = 0.0f;
+    float frameTimeMs_ = 0.0f;
+    double totalTime_ = 0.0;
+    uint64_t totalFrames_ = 0;
 };

@@ -242,3 +242,62 @@ glm::mat4 FollowCamera::projection(float aspect) const
 {
     return glm::perspective(glm::radians(fovDegrees_), aspect, 0.3f, 850.0f);
 }
+
+// ===========================================================================
+// FreeCamera Implementation (F4)
+// ===========================================================================
+void FreeCamera::initFrom(const glm::vec3& pos, const glm::vec3& target)
+{
+    position_ = pos;
+    const glm::vec3 dir = glm::normalize(target - pos);
+    pitch_ = std::asin(std::clamp(dir.y, -0.999f, 0.999f));
+    yaw_ = std::atan2(dir.x, dir.z);
+    fovDegrees_ = 65.0f;
+}
+
+glm::vec3 FreeCamera::forward() const
+{
+    return glm::vec3(
+        std::cos(pitch_) * std::sin(yaw_),
+        std::sin(pitch_),
+        std::cos(pitch_) * std::cos(yaw_)
+    );
+}
+
+glm::vec3 FreeCamera::right() const
+{
+    return glm::vec3(std::cos(yaw_), 0.0f, -std::sin(yaw_));
+}
+
+void FreeCamera::update(float dt, const Input& in)
+{
+    yaw_ -= static_cast<float>(in.mouseDeltaX()) * mouseSensitivity_;
+    pitch_ -= static_cast<float>(in.mouseDeltaY()) * mouseSensitivity_;
+    pitch_ = std::clamp(pitch_, -1.50f, 1.50f);
+
+    const bool sprint = in.down(GLFW_KEY_LEFT_SHIFT) || in.down(GLFW_KEY_RIGHT_SHIFT);
+    const float speed = baseSpeed_ * (sprint ? 2.5f : 1.0f);
+
+    const glm::vec3 fwd = forward();
+    const glm::vec3 rgt = right();
+
+    if (in.down(GLFW_KEY_W)) position_ += fwd * (speed * dt);
+    if (in.down(GLFW_KEY_S)) position_ -= fwd * (speed * dt);
+    if (in.down(GLFW_KEY_D)) position_ += rgt * (speed * dt);
+    if (in.down(GLFW_KEY_A)) position_ -= rgt * (speed * dt);
+
+    if (in.down(GLFW_KEY_E) || in.down(GLFW_KEY_SPACE)) position_.y += speed * dt;
+    if (in.down(GLFW_KEY_Q) || in.down(GLFW_KEY_LEFT_CONTROL)) position_.y -= speed * dt;
+
+    position_.y = std::max(position_.y, 0.35f);
+}
+
+glm::mat4 FreeCamera::view() const
+{
+    return glm::lookAt(position_, position_ + forward(), glm::vec3(0.0f, 1.0f, 0.0f));
+}
+
+glm::mat4 FreeCamera::projection(float aspect) const
+{
+    return glm::perspective(glm::radians(fovDegrees_), aspect, 0.2f, 1000.0f);
+}

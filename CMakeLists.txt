@@ -73,6 +73,7 @@ add_executable(kokpar
     src/Locations.cpp
     src/Settings.cpp
     src/Menu.cpp
+    src/UIFont.cpp
 )
 
 # Note: do not add 'src' to target_include_directories; on case-insensitive filesystems (Windows),
@@ -109,6 +110,7 @@ add_executable(test_ffa
     src/Locations.cpp
     src/Settings.cpp
     src/Menu.cpp
+    src/UIFont.cpp
 )
 target_link_libraries(test_ffa PRIVATE glad glfw glm::glm)
 target_compile_definitions(test_ffa PRIVATE GLFW_INCLUDE_NONE GLM_FORCE_RADIANS NOMINMAX)

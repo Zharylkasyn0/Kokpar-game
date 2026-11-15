@@ -117,6 +117,10 @@ Mesh BuildRevolved(const std::vector<Ring>& rings, int slices)
         {
             const unsigned int a = static_cast<unsigned int>(i) * stride + static_cast<unsigned int>(j);
             const unsigned int b = a + stride;
+            // Rings of every revolved builder are ordered top -> bottom (dy <= 0),
+            // so this order is the outward-facing CCW winding required by
+            // glFrontFace(GL_CCW) + glCullFace(GL_BACK). Reversing it culls the
+            // visible outer shell and shows the inside (hollow-looking parts).
             indices.push_back(a);
             indices.push_back(a + 1);
             indices.push_back(b);
@@ -369,6 +373,8 @@ Mesh MakeTorusMesh(float majorR, float minorR, int majorSlices, int minorSlices)
         {
             const unsigned int a = static_cast<unsigned int>(i) * stride + static_cast<unsigned int>(j);
             const unsigned int b = a + stride;
+            // Standard torus parameterisation: this order gives an outward
+            // CCW winding (front-facing with glFrontFace(GL_CCW) + GL_BACK).
             indices.push_back(a);
             indices.push_back(a + 1);
             indices.push_back(b);
