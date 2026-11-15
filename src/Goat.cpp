@@ -1,4 +1,5 @@
 #include "Goat.h"
+#include <cmath>
 
 namespace
 {
@@ -101,8 +102,14 @@ void Goat::updateCarried(float dt, const Horse& horse)
 
     const glm::vec3 anchorPos = glm::vec3(horse.carryAnchor()[3]);
 
+    // Attachment point on the goat's back:
+    // The rider grips the goat by its spine/back (+0.20m in goat local space).
+    // The goat hangs naturally beneath the rider's grip and slightly outward along horse.right()
+    // to ensure the carcass rests beside the rider without clipping into the horse's flank.
+    const glm::vec3 carryPos = anchorPos + horse.right() * 0.12f - glm::vec3(0.0f, 0.20f, 0.0f);
+
     // Smoothly fly from the ground into the rider's arm (small arc).
-    position_ = glm::mix(pickupFrom_, anchorPos, e);
+    position_ = glm::mix(pickupFrom_, carryPos, e);
     position_.y += std::sin(e * kPi) * 0.9f;
     yaw_ = pickupYaw_ + WrapAngle(horse.yaw() - pickupYaw_) * e;
     tumble_.x = 0.0f;
@@ -139,7 +146,7 @@ void Goat::updateCarried(float dt, const Horse& horse)
     // Acceleration in the carrier's local axes (forward / left).
     const float y = horse.yaw();
     const glm::vec3 fwd(std::sin(y), 0.0f, std::cos(y));
-    const glm::vec3 left(std::cos(y), 0.0f, -std::sin(y));
+    const glm::vec3 left(-std::cos(y), 0.0f, std::sin(y));
     const float accF = glm::dot(accel_, fwd);
     const float accL = glm::dot(accel_, left);
     const float accY = accel_.y;
@@ -261,12 +268,21 @@ void Goat::draw(Renderer& r, bool pickupHint) const
     r.draw(A.cone(), root * Translate(0.0f, 0.18f, -0.58f) * RotZ(wag) * RotX(-1.0f) *
                          Translate(0.0f, 0.07f, 0.0f) * Scale(0.07f, 0.16f, 0.07f), kFur);
 
-    // ---- Pickup marker: bobbing golden arrow above an idle goat ---------
+    // ---- Pickup marker: bobbing golden arrow + ground ring above/under an idle goat ---------
     if (state_ == State::Idle)
     {
-        const float bob = std::sin(time_ * 3.0f) * 0.12f;
-        const float size = pickupHint ? 1.35f : 1.0f;
-        const glm::vec3 color = pickupHint ? glm::vec3(1.0f, 1.0f, 0.55f) : kMarker;
-        r.draw(A.cone(), Translate(position_.x, 1.75f + bob, position_.z) * RotX(kPi) * Scale(0.30f * size, 0.45f * size, 0.30f * size), color);
+        const float bob = std::sin(time_ * 3.5f) * 0.14f;
+        const float size = pickupHint ? 1.40f : 1.05f;
+        const glm::vec3 arrowColor = pickupHint ? glm::vec3(0.35f, 1.0f, 0.55f) : kMarker;
+
+        // 1. Floating bobbing pointer arrow with crowning sphere
+        r.draw(A.cone(), Translate(position_.x, 1.85f + bob, position_.z) * RotX(kPi) * Scale(0.32f * size, 0.48f * size, 0.32f * size), arrowColor);
+        r.draw(A.sphere(), Translate(position_.x, 2.15f + bob, position_.z) * Scale(0.12f * size), glm::vec3(1.0f, 0.95f, 0.70f));
+
+        // 2. Ground pickup range ring on the turf (pulsing green when in range)
+        const float ringAlpha = pickupHint ? 0.65f : 0.25f;
+        const glm::vec3 ringColor = pickupHint ? glm::vec3(0.20f, 0.95f, 0.45f) : glm::vec3(1.0f, 0.85f, 0.20f);
+        r.drawUnlit(A.cylinder(), Translate(position_.x, 0.025f, position_.z) * Scale(2.8f, 0.015f, 2.8f), ringColor, ringAlpha * 0.30f);
+        r.drawUnlit(A.cylinder(), Translate(position_.x, 0.035f, position_.z) * Scale(pickupHint ? 2.65f : 2.74f, 0.02f, pickupHint ? 2.65f : 2.74f), ringColor, ringAlpha);
     }
 }
