@@ -40,7 +40,7 @@ bool Game::init(GLFWwindow* window)
     // Traditional Kipchak / Steppe participant tunic colors
     horses_[0].setVestColor(glm::vec3(0.80f, 0.14f, 0.14f)); // Player: Kipchak Crimson
     horses_[1].setVestColor(glm::vec3(0.18f, 0.45f, 0.90f)); // Bot 1: Steppe Azure Blue
-    horses_[2].setVestColor(glm::vec3(0.92f, 0.32f, 0.18f)); // Bot 2: Nomad Vermillion
+    horses_[2].setVestColor(glm::vec3(0.9f, 0.9f, 0.18f)); // Bot 2: Nomad Vermillion
     horses_[3].setVestColor(glm::vec3(0.20f, 0.68f, 0.32f)); // Bot 3: Grassland Emerald Green
 
     // Personality offsets for bot flanking

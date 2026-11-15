@@ -130,7 +130,7 @@ void Particles::emitScore(const glm::vec3& center)
     const glm::vec3 colors[] = {
         glm::vec3(1.0f, 0.80f, 0.10f), // Gold
         glm::vec3(0.0f, 0.65f, 0.85f), // Kazakh Turquoise
-        glm::vec3(0.95f, 0.25f, 0.20f), // Ruby Red
+        glm::vec3(0.95f, 0.95f, 0.20f), // Ruby Red
         glm::vec3(0.20f, 0.85f, 0.45f), // Emerald Green
         glm::vec3(1.0f, 0.95f, 0.70f)  // Warm Ivory
     };
