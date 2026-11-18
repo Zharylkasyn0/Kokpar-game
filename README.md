@@ -78,3 +78,4 @@ cmake --build --preset debug
 # Run the game
 .\build\debug\kokpar.exe
 ```
+

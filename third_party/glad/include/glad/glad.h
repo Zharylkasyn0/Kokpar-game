@@ -15921,6 +15921,7 @@ GLAPI int GLAD_GL_WIN_specular_fog;
 
 #ifdef __cplusplus
 }
+//extern "C"
 #endif
 
 #endif
