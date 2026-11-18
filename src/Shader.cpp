@@ -42,7 +42,7 @@ bool Shader::build(const char* vertexSource, const char* fragmentSource)
         if (fs != 0) glDeleteShader(fs);
         return false;
     }
-
+	// Create program and link
     program_ = glCreateProgram();
     glAttachShader(program_, vs);
     glAttachShader(program_, fs);

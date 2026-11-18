@@ -52,7 +52,7 @@ bool SettingsManager::save() const
     file << "selectedLocation=" << settings_.selectedLocation << "\n";
     return true;
 }
-
+// ===========================================================================
 const char* SettingsManager::qualityName() const
 {
     switch (settings_.graphicsQuality)

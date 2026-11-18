@@ -13,7 +13,7 @@ void Assets::init()
     horseHead_ = MakeHorseHeadMesh();
 }
 
-const Mesh& Assets::capsule(float radius, float cylinderLength)
+const Mesh& Assets::capsule(float radius, float cylinderLength) // radius is the radius of the hemispheres, cylinderLength is the length of the cylinder
 {
     const std::pair<int, int> key(static_cast<int>(std::lround(radius * 1000.0f)),
                                   static_cast<int>(std::lround(cylinderLength * 1000.0f)));
@@ -25,7 +25,7 @@ const Mesh& Assets::capsule(float radius, float cylinderLength)
     return it->second;
 }
 
-const Mesh& Assets::taperedCapsule(float rBottom, float rTop, float height)
+const Mesh& Assets::taperedCapsule(float rBottom, float rTop, float height) // rBottom is the radius of the bottom hemisphere, rTop is the radius of the top hemisphere
 {
     const std::tuple<int, int, int> key(
         static_cast<int>(std::lround(rBottom * 1000.0f)),

@@ -135,6 +135,7 @@ void MenuSystem::drawMainMenu(Renderer& r, const Assets& a, int width, int heigh
                              cardY + cardH - 128.0f * s - smallPx * 0.9f,
                              smallPx * 0.9f, kGoldDim);
 
+	// Menu items
     struct Btn
     {
         const char* en;

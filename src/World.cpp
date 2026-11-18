@@ -47,7 +47,7 @@ void World::buildLocationWorld(LocationId id)
 {
     obstacles_.clear();
     tufts_.clear();
-
+	// The arena is always a 100m x 100m square, centered at (0,0) in world space
     // Kazanlyk scoring goal remains authoritative across all locations
     zone_.center = glm::vec3(0.0f, 0.0f, 40.0f);
     zone_.radius = 5.2f;
